@@ -6,7 +6,18 @@ Dumie is a CLI tool designed to help you easily manage dummy instances used for 
 It provides an automated and simple command-line interface that helps reduce cloud costs in testing environments. 
 By tracking the active status of instances, it automatically terminates them to save costs and automatically saves the work state of testing environments.
 
-Dumie has four types of managers:
+### Main Features
+1. **Smart Instance Management**  
+   Automatically create, update, or delete your instances based on your personalized needs. Dumie saves your work by creating snapshots and restores them when needed. No more worrying about forgetting to shut things down.
+
+2. **Easy Configuration**  
+   Configure instance settings via CLI — including firewall rules. Dumie can automatically detect and allowlist your IP address, making it ideal for high-security environments.
+
+3. **Instant Connections**  
+   Connect to your instance instantly using the `connect` command. One step, and you're in.
+
+
+### Dumie has four types of managers:
 1. Active Manager: This manager automatically terminates instances when they are not in use.
 2. Schedule Manager: This manager automatically terminates instances based on a schedule.
 3. TTL Manager: This manager automatically terminates instances after a certain period of time.
