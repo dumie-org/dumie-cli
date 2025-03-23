@@ -1,5 +1,5 @@
 /*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
+Copyright © 2025 Chanhyeok Seo chanhyeok.seo2@gmail.com
 */
 package cmd
 
