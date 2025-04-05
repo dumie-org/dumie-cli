@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/chanhyeokseo/dumie/awsutils"
 	"github.com/spf13/cobra"
 )
 
@@ -17,7 +18,11 @@ type AWSConfig struct {
 	Region          string `json:"aws_region"`
 }
 
-const configFilePath = "../../aws_config.json"
+const (
+	configFilePath   = "../../aws_config.json"
+	lockTableName    = "dumie-lock-table"
+	defaultAWSRegion = "us-east-1"
+)
 
 // loadConfig loads the AWS configuration from the config file
 func loadConfig() (*AWSConfig, error) {
@@ -72,7 +77,7 @@ var configureCmd = &cobra.Command{
 		awsSecretAccessKey := promptForInput("Enter AWS_SECRET_ACCESS_KEY", config.SecretAccessKey)
 		awsRegion := promptForInput("Enter AWS_REGION", config.Region)
 		if awsRegion == "" {
-			awsRegion = "us-east-1"
+			awsRegion = defaultAWSRegion
 		}
 
 		newConfig := AWSConfig{
@@ -95,6 +100,30 @@ var configureCmd = &cobra.Command{
 		}
 
 		fmt.Println("Configuration saved successfully.")
+
+		client, err := awsutils.GetDynamoDBClient()
+		if err != nil {
+			fmt.Printf("Error getting AWS client: %v\n", err)
+			return
+		}
+
+		isTableExists, err := awsutils.SearchDynamoDBLockTable(client)
+		if err != nil {
+			fmt.Printf("Error searching for DynamoDB lock table: %v\n", err)
+			return
+		}
+
+		if isTableExists {
+			fmt.Println("DynamoDB lock table already exists. Skipping creation.")
+			return
+		}
+
+		if err := awsutils.InitializeDynamoDBLockTable(client); err != nil {
+			fmt.Printf("Error initializing DynamoDB lock table: %v\n", err)
+			return
+		}
+
+		fmt.Println("DynamoDB lock table initialized successfully.")
 	},
 }
 

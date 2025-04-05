@@ -16,7 +16,7 @@ var manualCmd = &cobra.Command{
 	Short: "Dumie manual manager",
 	Long:  `TODO`,
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := awsutils.GetAWSClient()
+		client, err := awsutils.GetEC2AWSClient()
 
 		profile := args[0]
 
