@@ -4,6 +4,7 @@ Copyright © 2025 Chanhyeok Seo chanhyeok.seo2@gmail.com
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -99,7 +100,7 @@ var configureCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println("Configuration saved successfully.")
+		fmt.Println("Configuration saved successfully. Now initializing DynamoDB lock table...")
 
 		client, err := awsutils.GetDynamoDBClient()
 		if err != nil {
@@ -118,8 +119,11 @@ var configureCmd = &cobra.Command{
 			return
 		}
 
-		if err := awsutils.InitializeDynamoDBLockTable(client); err != nil {
-			fmt.Printf("Error initializing DynamoDB lock table: %v\n", err)
+		lock := awsutils.NewDynamoDBLock(client)
+
+		err = lock.CreateLockTable(context.Background())
+		if err != nil {
+			fmt.Printf("Error creating DynamoDB lock table: %v\n", err)
 			return
 		}
 
