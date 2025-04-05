@@ -11,6 +11,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 )
 
@@ -39,8 +40,8 @@ func LoadAWSConfig() (*AWSConfig, error) {
 	return &config, nil
 }
 
-// GetAWSClient initializes and returns an AWS EC2 client using the loaded configuration
-func GetAWSClient() (*ec2.Client, error) {
+// GetEC2AWSClient initializes and returns an AWS EC2 client using the loaded configuration
+func GetEC2AWSClient() (*ec2.Client, error) {
 	cfgData, err := LoadAWSConfig()
 	if err != nil {
 		return nil, err
@@ -60,6 +61,30 @@ func GetAWSClient() (*ec2.Client, error) {
 	}
 
 	client := ec2.NewFromConfig(awsCfg)
+	fmt.Println("Retrieved client:", client)
+	return client, nil
+}
+
+func GetDynamoDBClient() (*dynamodb.Client, error) {
+	cfgData, err := LoadAWSConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	awsCfg, err := config.LoadDefaultConfig(
+		context.TODO(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			cfgData.AccessKeyID,
+			cfgData.SecretAccessKey,
+			"",
+		)),
+		config.WithRegion(cfgData.Region),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to load AWS SDK config: %w", err)
+	}
+
+	client := dynamodb.NewFromConfig(awsCfg)
 	fmt.Println("Retrieved client:", client)
 	return client, nil
 }

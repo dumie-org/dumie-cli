@@ -4,6 +4,7 @@ Copyright © 2025 Chanhyeok Seo chanhyeok.seo2@gmail.com
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -16,10 +17,34 @@ var manualCmd = &cobra.Command{
 	Short: "Dumie manual manager",
 	Long:  `TODO`,
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := awsutils.GetAWSClient()
 
 		profile := args[0]
 
+		lockClient, err := awsutils.GetDynamoDBClient()
+		if err != nil {
+			fmt.Printf("Error getting DynamoDB client: %v\n", err)
+			return
+		}
+
+		lock := awsutils.NewDynamoDBLock(lockClient)
+
+		fmt.Println("Acquiring deployment lock...")
+		err = lock.AcquireLock(context.TODO(), profile)
+		if err != nil {
+			fmt.Printf("Error acquiring deployment lock: %v\n", err)
+			return
+		}
+		fmt.Println("Deployment lock acquired.")
+		defer func() {
+			fmt.Println("Releasing deployment lock...")
+			err := lock.ReleaseLock(context.TODO(), profile)
+			if err != nil {
+				fmt.Printf("Error releasing deployment lock: %v\n", err)
+			}
+			fmt.Println("Deployment lock released.")
+		}()
+
+		client, err := awsutils.GetEC2AWSClient()
 		if err != nil {
 			fmt.Printf("Error getting AWS client: %v\n", err)
 			return
