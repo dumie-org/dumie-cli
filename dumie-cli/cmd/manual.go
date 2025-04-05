@@ -17,6 +17,9 @@ var manualCmd = &cobra.Command{
 	Long:  `TODO`,
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := awsutils.GetAWSClient()
+
+		profile := args[0]
+
 		if err != nil {
 			fmt.Printf("Error getting AWS client: %v\n", err)
 			return
@@ -38,8 +41,20 @@ var manualCmd = &cobra.Command{
 			return
 		}
 
+		// Search if the EC2 instance already exists
+		existingInstanceID, err := awsutils.SearchEC2Instance(client, profile)
+		if err != nil {
+			fmt.Printf("Error searching for existing EC2 instance: %v\n", err)
+			return
+		}
+
+		if existingInstanceID != nil {
+			fmt.Printf("EC2 instance already exists with ID: %s\n", *existingInstanceID)
+			return
+		}
+
 		// Launch the EC2 instance
-		instanceID, err := awsutils.LaunchEC2Instance(client, defaultAMI, instanceType, sgID)
+		instanceID, err := awsutils.LaunchEC2Instance(client, profile, defaultAMI, instanceType, sgID)
 		if err != nil {
 			fmt.Printf("Error launching EC2 instance: %v\n", err)
 			return

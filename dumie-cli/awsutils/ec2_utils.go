@@ -85,18 +85,55 @@ func CreateOrGetSecurityGroup(client *ec2.Client, groupName string) (*string, er
 	return createSGOutput.GroupId, nil
 }
 
+// SearchEC2Instance searches for an existing EC2 instance
+func SearchEC2Instance(client *ec2.Client, profile string) (*string, error) {
+	describeInstancesInput := &ec2.DescribeInstancesInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("tag:Name"),
+				Values: []string{profile},
+			},
+			{
+				Name:   aws.String("instance-state-name"),
+				Values: []string{"running", "pending"},
+			},
+		},
+	}
+	describeInstancesOutput, err := client.DescribeInstances(context.TODO(), describeInstancesInput)
+	if err != nil {
+		return nil, fmt.Errorf("error describing instances: %w", err)
+	}
+
+	if len(describeInstancesOutput.Reservations) == 0 {
+		return nil, nil
+	}
+
+	return describeInstancesOutput.Reservations[0].Instances[0].InstanceId, nil
+}
+
 // LaunchEC2Instance launches an EC2 instance
-func LaunchEC2Instance(client *ec2.Client, amiID string, instanceType types.InstanceType, sgID *string) (*string, error) {
+func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanceType types.InstanceType, sgID *string) (*string, error) {
+	tags := []types.TagSpecification{
+		{
+			ResourceType: types.ResourceTypeInstance,
+			Tags: []types.Tag{
+				{
+					Key:   aws.String("Name"),
+					Value: aws.String(profile),
+				},
+			},
+		},
+	}
 	runInstancesInput := &ec2.RunInstancesInput{
-		ImageId:      &amiID,
-		InstanceType: instanceType,
-		MinCount:     aws.Int32(1),
-		MaxCount:     aws.Int32(1),
+		TagSpecifications: tags,
+		ImageId:           &amiID,
+		InstanceType:      instanceType,
+		MinCount:          aws.Int32(1),
+		MaxCount:          aws.Int32(1),
 		SecurityGroupIds: []string{
 			*sgID,
 		},
 	}
-
 	runInstancesOutput, err := client.RunInstances(context.TODO(), runInstancesInput)
 	if err != nil {
 		return nil, fmt.Errorf("error running instances: %w", err)
