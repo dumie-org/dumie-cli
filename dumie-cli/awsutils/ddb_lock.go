@@ -73,10 +73,18 @@ func (lock *DynamoDBLock) CreateLockTable(ctx context.Context) error {
 }
 
 func (lock *DynamoDBLock) AcquireLock(ctx context.Context, lockID string) error {
+	isLocked, err := lock.checkLockStatus(ctx, lockID)
+	if err != nil {
+		return fmt.Errorf("failed to check lock status for lockID %s: %w", lockID, err)
+	}
+	if isLocked {
+		return fmt.Errorf("lock %s is already held", lockID)
+	}
+
 	now := time.Now().Unix()
 	expiration := now + int64(lock.TTL.Seconds())
 
-	_, err := lock.Client.PutItem(ctx, &dynamodb.PutItemInput{
+	_, err = lock.Client.PutItem(ctx, &dynamodb.PutItemInput{
 		TableName: aws.String(lock.TableName),
 		Item: map[string]types.AttributeValue{
 			"LockID":  &types.AttributeValueMemberS{Value: lockID},
@@ -110,7 +118,7 @@ func (lock *DynamoDBLock) ReleaseLock(ctx context.Context, lockID string) error 
 	return nil
 }
 
-func (lock *DynamoDBLock) CheckLockStatus(ctx context.Context, lockID string) (bool, error) {
+func (lock *DynamoDBLock) checkLockStatus(ctx context.Context, lockID string) (bool, error) {
 	output, err := lock.Client.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(lock.TableName),
 		Key: map[string]types.AttributeValue{
