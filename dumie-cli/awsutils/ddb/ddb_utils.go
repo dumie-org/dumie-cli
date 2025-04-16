@@ -1,7 +1,7 @@
 /*
 Copyright © 2025 Chanhyeok Seo chanhyeok.seo2@gmail.com
 */
-package awsutils
+package ddb
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/dumie-org/dumie-cli/awsutils/common"
 )
 
 type DynamoDBLock struct {
@@ -21,8 +22,10 @@ type DynamoDBLock struct {
 	TTL       time.Duration
 }
 
-const tableName = "dumie-lock-table"
-const ttl = 5 * time.Minute
+const (
+	tableName = "dumie-lock-table"
+	ttl       = 5 * time.Minute
+)
 
 func NewDynamoDBLock(client *dynamodb.Client) *DynamoDBLock {
 	return &DynamoDBLock{
@@ -68,8 +71,18 @@ func (lock *DynamoDBLock) CreateLockTable(ctx context.Context) error {
 		return fmt.Errorf("failed to create lock table: %w", err)
 	}
 
-	fmt.Printf("DynamoDB lock table %s created successfully.\n", lock.TableName)
+	err = lock.waitForTableActive(ctx)
+	if err != nil {
+		return fmt.Errorf("failed waiting for table to become active: %w", err)
+	}
+
+	fmt.Printf("DynamoDB lock table %s created and active.\n", lock.TableName)
 	return nil
+}
+
+func (lock *DynamoDBLock) waitForTableActive(ctx context.Context) error {
+	checker := NewDynamoDBStatusChecker(lock.Client, lock.TableName)
+	return common.WaitForResourceStatus(ctx, checker)
 }
 
 func (lock *DynamoDBLock) AcquireLock(ctx context.Context, lockID string) error {

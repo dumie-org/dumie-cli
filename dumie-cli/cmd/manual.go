@@ -8,7 +8,9 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/chanhyeokseo/dumie/awsutils"
+	"github.com/dumie-org/dumie-cli/awsutils"
+	"github.com/dumie-org/dumie-cli/awsutils/ddb"
+	"github.com/dumie-org/dumie-cli/awsutils/ec2"
 	"github.com/spf13/cobra"
 )
 
@@ -26,7 +28,7 @@ var manualCmd = &cobra.Command{
 			return
 		}
 
-		lock := awsutils.NewDynamoDBLock(lockClient)
+		lock := ddb.NewDynamoDBLock(lockClient)
 
 		fmt.Println("Acquiring deployment lock...")
 		err = lock.AcquireLock(context.TODO(), profile)
@@ -50,7 +52,7 @@ var manualCmd = &cobra.Command{
 			return
 		}
 
-		defaultAMI, err := awsutils.GetLatestAmazonLinuxAMI(client)
+		defaultAMI, err := ec2.GetLatestAmazonLinuxAMI(client)
 		if err != nil {
 			fmt.Printf("Error getting latest Amazon Linux AMI: %v\n", err)
 			return
@@ -59,15 +61,13 @@ var manualCmd = &cobra.Command{
 		instanceType := types.InstanceTypeT2Micro
 		securityGroupName := "dumie-default-sg"
 
-		// Create or get the Security Group
-		sgID, err := awsutils.CreateOrGetSecurityGroup(client, securityGroupName)
+		sgID, err := ec2.CreateOrGetSecurityGroup(client, securityGroupName)
 		if err != nil {
 			fmt.Printf("Error creating or getting Security Group: %v\n", err)
 			return
 		}
 
-		// Search if the EC2 instance already exists
-		existingInstanceID, err := awsutils.SearchEC2Instance(client, profile)
+		existingInstanceID, err := ec2.SearchEC2Instance(client, profile)
 		if err != nil {
 			fmt.Printf("Error searching for existing EC2 instance: %v\n", err)
 			return
@@ -78,8 +78,7 @@ var manualCmd = &cobra.Command{
 			return
 		}
 
-		// Launch the EC2 instance
-		instanceID, err := awsutils.LaunchEC2Instance(client, profile, defaultAMI, instanceType, sgID)
+		instanceID, err := ec2.LaunchEC2Instance(client, profile, defaultAMI, instanceType, sgID)
 		if err != nil {
 			fmt.Printf("Error launching EC2 instance: %v\n", err)
 			return

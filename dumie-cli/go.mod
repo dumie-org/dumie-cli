@@ -1,4 +1,4 @@
-module github.com/chanhyeokseo/dumie
+module github.com/dumie-org/dumie-cli
 
 go 1.24.1
 
