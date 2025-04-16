@@ -1,7 +1,7 @@
 /*
 Copyright © 2025 Chanhyeok Seo chanhyeok.seo2@gmail.com
 */
-package awsutils
+package ec2
 
 import (
 	"context"
@@ -10,9 +10,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/dumie-org/dumie-cli/awsutils/common"
 )
 
-// GetDefaultVPCID retrieves the default VPC ID
 func GetDefaultVPCID(client *ec2.Client) (*string, error) {
 	describeVPCsInput := &ec2.DescribeVpcsInput{
 		Filters: []types.Filter{
@@ -33,9 +33,7 @@ func GetDefaultVPCID(client *ec2.Client) (*string, error) {
 	return describeVPCsOutput.Vpcs[0].VpcId, nil
 }
 
-// CreateOrGetSecurityGroup creates or retrieves a Security Group
 func CreateOrGetSecurityGroup(client *ec2.Client, groupName string) (*string, error) {
-	// Check if the Security Group already exists
 	describeSGInput := &ec2.DescribeSecurityGroupsInput{
 		GroupNames: []string{groupName},
 	}
@@ -44,7 +42,6 @@ func CreateOrGetSecurityGroup(client *ec2.Client, groupName string) (*string, er
 		return describeSGOutput.SecurityGroups[0].GroupId, nil
 	}
 
-	// Create a new Security Group
 	vpcID, err := GetDefaultVPCID(client)
 	if err != nil {
 		return nil, fmt.Errorf("error getting default VPC ID: %w", err)
@@ -60,7 +57,6 @@ func CreateOrGetSecurityGroup(client *ec2.Client, groupName string) (*string, er
 		return nil, fmt.Errorf("error creating Security Group: %w", err)
 	}
 
-	// Authorize inbound traffic
 	authorizeSGInput := &ec2.AuthorizeSecurityGroupIngressInput{
 		GroupId: createSGOutput.GroupId,
 		IpPermissions: []types.IpPermission{
@@ -85,7 +81,6 @@ func CreateOrGetSecurityGroup(client *ec2.Client, groupName string) (*string, er
 	return createSGOutput.GroupId, nil
 }
 
-// SearchEC2Instance searches for an existing EC2 instance
 func SearchEC2Instance(client *ec2.Client, profile string) (*string, error) {
 	describeInstancesInput := &ec2.DescribeInstancesInput{
 		Filters: []types.Filter{
@@ -111,7 +106,6 @@ func SearchEC2Instance(client *ec2.Client, profile string) (*string, error) {
 	return describeInstancesOutput.Reservations[0].Instances[0].InstanceId, nil
 }
 
-// LaunchEC2Instance launches an EC2 instance
 func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanceType types.InstanceType, sgID *string) (*string, error) {
 	tags := []types.TagSpecification{
 		{
@@ -140,7 +134,18 @@ func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanc
 	}
 
 	instanceID := runInstancesOutput.Instances[0].InstanceId
+
+	err = waitForInstanceRunning(context.TODO(), client, *instanceID)
+	if err != nil {
+		return nil, fmt.Errorf("error waiting for instance: %w", err)
+	}
+
 	return instanceID, nil
+}
+
+func waitForInstanceRunning(ctx context.Context, client *ec2.Client, instanceID string) error {
+	checker := NewEC2StatusChecker(client, instanceID)
+	return common.WaitForResourceStatus(ctx, checker)
 }
 
 func GetLatestAmazonLinuxAMI(client *ec2.Client) (string, error) {
@@ -166,7 +171,6 @@ func GetLatestAmazonLinuxAMI(client *ec2.Client) (string, error) {
 		return "", fmt.Errorf("no Amazon Linux AMI found")
 	}
 
-	// Find the latest image by creation date
 	latestImage := describeImagesOutput.Images[0]
 	for _, image := range describeImagesOutput.Images {
 		if image.CreationDate != nil && *image.CreationDate > *latestImage.CreationDate {

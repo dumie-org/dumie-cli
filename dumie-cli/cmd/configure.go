@@ -9,7 +9,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/chanhyeokseo/dumie/awsutils"
+	"github.com/dumie-org/dumie-cli/awsutils"
+	"github.com/dumie-org/dumie-cli/awsutils/ddb"
 	"github.com/spf13/cobra"
 )
 
@@ -25,12 +26,11 @@ const (
 	defaultAWSRegion = "us-east-1"
 )
 
-// loadConfig loads the AWS configuration from the config file
 func loadConfig() (*AWSConfig, error) {
 	file, err := os.Open(configFilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &AWSConfig{}, nil // Return an empty config if the file does not exist
+			return &AWSConfig{}, nil
 		}
 		return nil, fmt.Errorf("error opening config file: %w", err)
 	}
@@ -45,7 +45,6 @@ func loadConfig() (*AWSConfig, error) {
 	return &config, nil
 }
 
-// promptForInput prompts the user for input, showing the default value if available
 func promptForInput(prompt, defaultValue string) string {
 	if defaultValue != "" {
 		fmt.Printf("%s (%s): ", prompt, defaultValue)
@@ -62,7 +61,6 @@ func promptForInput(prompt, defaultValue string) string {
 	return input
 }
 
-// configureCmd represents the configure command
 var configureCmd = &cobra.Command{
 	Use:   "configure",
 	Short: "Configure Dumie manager to integrate with AWS",
@@ -108,7 +106,7 @@ var configureCmd = &cobra.Command{
 			return
 		}
 
-		isTableExists, err := awsutils.SearchDynamoDBLockTable(client)
+		isTableExists, err := ddb.SearchDynamoDBLockTable(client)
 		if err != nil {
 			fmt.Printf("Error searching for DynamoDB lock table: %v\n", err)
 			return
@@ -119,7 +117,7 @@ var configureCmd = &cobra.Command{
 			return
 		}
 
-		lock := awsutils.NewDynamoDBLock(client)
+		lock := ddb.NewDynamoDBLock(client)
 
 		err = lock.CreateLockTable(context.Background())
 		if err != nil {

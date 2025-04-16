@@ -40,7 +40,6 @@ func LoadAWSConfig() (*AWSConfig, error) {
 	return &config, nil
 }
 
-// GetEC2AWSClient initializes and returns an AWS EC2 client using the loaded configuration
 func GetEC2AWSClient() (*ec2.Client, error) {
 	cfgData, err := LoadAWSConfig()
 	if err != nil {
