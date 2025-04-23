@@ -180,3 +180,33 @@ func GetLatestAmazonLinuxAMI(client *ec2.Client) (string, error) {
 
 	return *latestImage.ImageId, nil
 }
+
+func GetRootVolumeID(ctx context.Context, client *ec2.Client, instanceID string) (string, error) {
+	output, err := client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
+		InstanceIds: []string{instanceID},
+	})
+	if err != nil || len(output.Reservations) == 0 || len(output.Reservations[0].Instances) == 0 {
+		return "", fmt.Errorf("could not find instance: %w", err)
+	}
+
+	for _, mapping := range output.Reservations[0].Instances[0].BlockDeviceMappings {
+		if mapping.DeviceName != nil && *mapping.DeviceName == "/dev/xvda" {
+			return *mapping.Ebs.VolumeId, nil
+		}
+	}
+
+	return "", fmt.Errorf("root volume not found")
+}
+
+func TerminateInstance(ctx context.Context, client *ec2.Client, instanceID string) error {
+	input := &ec2.TerminateInstancesInput{
+		InstanceIds: []string{instanceID},
+	}
+
+	_, err := client.TerminateInstances(ctx, input)
+	if err != nil {
+		return fmt.Errorf("failed to terminate instance %s: %w", instanceID, err)
+	}
+
+	return nil
+}
