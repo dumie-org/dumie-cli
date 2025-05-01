@@ -10,22 +10,31 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/dumie-org/dumie-cli/awsutils"
+	"github.com/google/uuid"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 )
 
-const (
-	// KeyName is the name of the EC2 key pair used for instance access
-	KeyName = "dumie-key-pair"
-)
+func generateKeyPairName() string {
+	randomString := uuid.New().String()[:23]
+	return fmt.Sprintf("dumie-key-pair-%s", randomString)
+}
 
 func GenerateKeyPair(client *ec2.Client) (string, error) {
-	privateKeyPath := filepath.Join(".", fmt.Sprintf("%s.pem", KeyName))
-	if _, err := os.Stat(privateKeyPath); err == nil {
-		fmt.Printf("Key pair file already exists at %s, skipping generation\n", privateKeyPath)
-		return KeyName, nil
+	existingKeyName, err := GetKeyPairName()
+	if err != nil {
+		return "", fmt.Errorf("failed to get key pair name: %v", err)
 	}
+
+	if existingKeyName != "" {
+		return existingKeyName, nil
+	}
+
+	newKeyName := generateKeyPairName()
+	privateKeyPath := filepath.Join(".", fmt.Sprintf("%s.pem", newKeyName))
 
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -38,7 +47,7 @@ func GenerateKeyPair(client *ec2.Client) (string, error) {
 	}
 
 	createKeyPairInput := &ec2.CreateKeyPairInput{
-		KeyName: aws.String(KeyName),
+		KeyName: aws.String(newKeyName),
 		KeyType: types.KeyTypeRsa,
 	}
 
@@ -58,4 +67,13 @@ func GenerateKeyPair(client *ec2.Client) (string, error) {
 	}
 
 	return *result.KeyName, nil
+}
+
+func GetKeyPairName() (string, error) {
+	config, err := awsutils.LoadAWSConfig()
+	if err != nil {
+		return "", fmt.Errorf("failed to load config: %v", err)
+	}
+
+	return config.KeyPairName, nil
 }

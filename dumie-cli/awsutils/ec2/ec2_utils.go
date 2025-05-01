@@ -106,7 +106,7 @@ func SearchEC2Instance(client *ec2.Client, profile string) (*string, error) {
 	return describeInstancesOutput.Reservations[0].Instances[0].InstanceId, nil
 }
 
-func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanceType types.InstanceType, sgID *string) (*string, error) {
+func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanceType types.InstanceType, sgID *string, keyName string) (*string, error) {
 	tags := []types.TagSpecification{
 		{
 			ResourceType: types.ResourceTypeInstance,
@@ -127,7 +127,7 @@ func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanc
 		SecurityGroupIds: []string{
 			*sgID,
 		},
-		KeyName: aws.String(common.KeyName),
+		KeyName: aws.String(keyName),
 	}
 	runInstancesOutput, err := client.RunInstances(context.TODO(), runInstancesInput)
 	if err != nil {

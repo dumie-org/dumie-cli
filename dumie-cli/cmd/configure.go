@@ -19,31 +19,31 @@ type AWSConfig struct {
 	AccessKeyID     string `json:"aws_access_key_id"`
 	SecretAccessKey string `json:"aws_secret_access_key"`
 	Region          string `json:"aws_region"`
+	KeyPairName     string `json:"key_pair_name"`
 }
 
 const (
-	configFilePath   = "../../aws_config.json"
 	lockTableName    = "dumie-lock-table"
 	defaultAWSRegion = "us-east-1"
 )
 
 func loadConfig() (*AWSConfig, error) {
-	file, err := os.Open(configFilePath)
+	config := &AWSConfig{}
+
+	if _, err := os.Stat(common.ConfigFilePath); os.IsNotExist(err) {
+		return config, nil
+	}
+
+	data, err := os.ReadFile(common.ConfigFilePath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return &AWSConfig{}, nil
-		}
-		return nil, fmt.Errorf("error opening config file: %w", err)
-	}
-	defer file.Close()
-
-	var config AWSConfig
-	decoder := json.NewDecoder(file)
-	if err := decoder.Decode(&config); err != nil {
-		return nil, fmt.Errorf("error decoding config file: %w", err)
+		return nil, fmt.Errorf("error reading config file: %w", err)
 	}
 
-	return &config, nil
+	if err := json.Unmarshal(data, config); err != nil {
+		return nil, fmt.Errorf("error parsing config file: %w", err)
+	}
+
+	return config, nil
 }
 
 func promptForInput(prompt, defaultValue string) string {
@@ -110,6 +110,23 @@ func configureEC2KeyPair() error {
 	fmt.Printf("Successfully configured key pair.\n")
 	fmt.Printf("Key Pair Name: %s\n", keyPairName)
 
+	config, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("error loading config: %v", err)
+	}
+
+	config.KeyPairName = keyPairName
+
+	// Save the updated config
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("error marshaling config: %v", err)
+	}
+
+	if err := os.WriteFile(common.ConfigFilePath, data, 0644); err != nil {
+		return fmt.Errorf("error writing config file: %v", err)
+	}
+
 	return nil
 }
 
@@ -135,9 +152,10 @@ var configureCmd = &cobra.Command{
 			AccessKeyID:     awsAccessKeyID,
 			SecretAccessKey: awsSecretAccessKey,
 			Region:          awsRegion,
+			KeyPairName:     config.KeyPairName,
 		}
 
-		file, err := os.Create(configFilePath)
+		file, err := os.Create(common.ConfigFilePath)
 		if err != nil {
 			fmt.Printf("Error creating config file: %v\n", err)
 			return

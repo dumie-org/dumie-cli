@@ -19,9 +19,10 @@ type AWSConfig struct {
 	AccessKeyID     string `json:"aws_access_key_id"`
 	SecretAccessKey string `json:"aws_secret_access_key"`
 	Region          string `json:"aws_region"`
+	KeyPairName     string `json:"key_pair_name"`
 }
 
-const configFilePath = "../../aws_config.json"
+const configFilePath = "aws_config.json"
 
 // LoadAWSConfig loads the AWS configuration from the config file
 func LoadAWSConfig() (*AWSConfig, error) {
