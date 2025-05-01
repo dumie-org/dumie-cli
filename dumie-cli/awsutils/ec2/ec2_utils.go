@@ -127,6 +127,7 @@ func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanc
 		SecurityGroupIds: []string{
 			*sgID,
 		},
+		KeyName: aws.String(common.KeyName),
 	}
 	runInstancesOutput, err := client.RunInstances(context.TODO(), runInstancesInput)
 	if err != nil {
