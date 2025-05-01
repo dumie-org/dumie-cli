@@ -14,4 +14,7 @@ const (
 
 	// StatusUpdateInterval is the interval for showing status updates
 	StatusUpdateInterval = 5
+
+	// ConfigFilePath is the path to the config file
+	ConfigFilePath = "aws_config.json"
 )

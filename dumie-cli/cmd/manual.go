@@ -9,6 +9,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/dumie-org/dumie-cli/awsutils"
+	"github.com/dumie-org/dumie-cli/awsutils/common"
 	"github.com/dumie-org/dumie-cli/awsutils/ddb"
 	"github.com/dumie-org/dumie-cli/awsutils/ec2"
 	"github.com/spf13/cobra"
@@ -78,7 +79,13 @@ var manualCmd = &cobra.Command{
 			return
 		}
 
-		instanceID, err := ec2.LaunchEC2Instance(client, profile, defaultAMI, instanceType, sgID)
+		keyName, err := common.GetKeyPairName()
+		if err != nil {
+			fmt.Printf("Error getting key pair name: %v\n", err)
+			return
+		}
+
+		instanceID, err := ec2.LaunchEC2Instance(client, profile, defaultAMI, instanceType, sgID, keyName)
 		if err != nil {
 			fmt.Printf("Error launching EC2 instance: %v\n", err)
 			return
