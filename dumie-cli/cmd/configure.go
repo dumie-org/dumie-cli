@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"github.com/dumie-org/dumie-cli/awsutils"
+	"github.com/dumie-org/dumie-cli/awsutils/common"
 	"github.com/dumie-org/dumie-cli/awsutils/ddb"
 	"github.com/spf13/cobra"
 )
@@ -18,31 +19,31 @@ type AWSConfig struct {
 	AccessKeyID     string `json:"aws_access_key_id"`
 	SecretAccessKey string `json:"aws_secret_access_key"`
 	Region          string `json:"aws_region"`
+	KeyPairName     string `json:"key_pair_name"`
 }
 
 const (
-	configFilePath   = "../../aws_config.json"
 	lockTableName    = "dumie-lock-table"
 	defaultAWSRegion = "us-east-1"
 )
 
 func loadConfig() (*AWSConfig, error) {
-	file, err := os.Open(configFilePath)
+	config := &AWSConfig{}
+
+	if _, err := os.Stat(common.ConfigFilePath); os.IsNotExist(err) {
+		return config, nil
+	}
+
+	data, err := os.ReadFile(common.ConfigFilePath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return &AWSConfig{}, nil
-		}
-		return nil, fmt.Errorf("error opening config file: %w", err)
-	}
-	defer file.Close()
-
-	var config AWSConfig
-	decoder := json.NewDecoder(file)
-	if err := decoder.Decode(&config); err != nil {
-		return nil, fmt.Errorf("error decoding config file: %w", err)
+		return nil, fmt.Errorf("error reading config file: %w", err)
 	}
 
-	return &config, nil
+	if err := json.Unmarshal(data, config); err != nil {
+		return nil, fmt.Errorf("error parsing config file: %w", err)
+	}
+
+	return config, nil
 }
 
 func promptForInput(prompt, defaultValue string) string {
@@ -59,6 +60,74 @@ func promptForInput(prompt, defaultValue string) string {
 		return defaultValue
 	}
 	return input
+}
+
+func configureDynamoDBLockTable() error {
+	fmt.Println("Now initializing DynamoDB lock table...")
+
+	client, err := awsutils.GetDynamoDBClient()
+	if err != nil {
+		fmt.Printf("Error getting AWS client: %v\n", err)
+		return err
+	}
+
+	isTableExists, err := ddb.SearchDynamoDBLockTable(client)
+	if err != nil {
+		fmt.Printf("Error searching for DynamoDB lock table: %v\n", err)
+		return err
+	}
+
+	if isTableExists {
+		fmt.Println("DynamoDB lock table already exists. Skipping creation.")
+		return nil
+	}
+
+	lock := ddb.NewDynamoDBLock(client)
+
+	err = lock.CreateLockTable(context.Background())
+	if err != nil {
+		fmt.Printf("Error creating DynamoDB lock table: %v\n", err)
+		return err
+	}
+
+	fmt.Println("DynamoDB lock table initialized successfully.")
+	return nil
+}
+
+func configureEC2KeyPair() error {
+	fmt.Println("Configuring EC2 key pair...")
+
+	client, err := awsutils.GetEC2AWSClient()
+	if err != nil {
+		return fmt.Errorf("error creating AWS client: %v", err)
+	}
+
+	keyPairName, err := common.GenerateKeyPair(client)
+	if err != nil {
+		return fmt.Errorf("error generating key pair: %v", err)
+	}
+
+	fmt.Printf("Successfully configured key pair.\n")
+	fmt.Printf("Key Pair Name: %s\n", keyPairName)
+
+	config, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("error loading config: %v", err)
+	}
+
+	config.KeyPairName = keyPairName
+
+	// Save the updated config
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("error marshaling config: %v", err)
+	}
+
+	if err := os.WriteFile(common.ConfigFilePath, data, 0644); err != nil {
+		return fmt.Errorf("error writing config file: %v", err)
+	}
+
+	return nil
 }
 
 var configureCmd = &cobra.Command{
@@ -83,9 +152,10 @@ var configureCmd = &cobra.Command{
 			AccessKeyID:     awsAccessKeyID,
 			SecretAccessKey: awsSecretAccessKey,
 			Region:          awsRegion,
+			KeyPairName:     config.KeyPairName,
 		}
 
-		file, err := os.Create(configFilePath)
+		file, err := os.Create(common.ConfigFilePath)
 		if err != nil {
 			fmt.Printf("Error creating config file: %v\n", err)
 			return
@@ -98,34 +168,21 @@ var configureCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println("Configuration saved successfully. Now initializing DynamoDB lock table...")
+		fmt.Println("Configuration saved successfully.")
 
-		client, err := awsutils.GetDynamoDBClient()
+		err = configureDynamoDBLockTable()
 		if err != nil {
-			fmt.Printf("Error getting AWS client: %v\n", err)
+			fmt.Printf("Error configuring DynamoDB lock table: %v\n", err)
 			return
 		}
 
-		isTableExists, err := ddb.SearchDynamoDBLockTable(client)
+		err = configureEC2KeyPair()
 		if err != nil {
-			fmt.Printf("Error searching for DynamoDB lock table: %v\n", err)
+			fmt.Printf("Error configuring EC2 key pair: %v\n", err)
 			return
 		}
 
-		if isTableExists {
-			fmt.Println("DynamoDB lock table already exists. Skipping creation.")
-			return
-		}
-
-		lock := ddb.NewDynamoDBLock(client)
-
-		err = lock.CreateLockTable(context.Background())
-		if err != nil {
-			fmt.Printf("Error creating DynamoDB lock table: %v\n", err)
-			return
-		}
-
-		fmt.Println("DynamoDB lock table initialized successfully.")
+		fmt.Println("Configuration completed successfully.")
 	},
 }
 

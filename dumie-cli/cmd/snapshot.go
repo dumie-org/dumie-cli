@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"github.com/dumie-org/dumie-cli/awsutils/common"
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/spf13/cobra"
@@ -42,10 +43,16 @@ var snapshotCmd = &cobra.Command{
 			return
 		}
 
+		keyName, err := common.GenerateKeyPair(ec2Client)
+		if err != nil {
+			fmt.Printf("Error getting key pair name: %v\n", err)
+			return
+		}
+
 		instanceType := types.InstanceTypeT2Micro
 		instanceName := fmt.Sprintf("%s-instance", snapshotID)
 
-		instanceIDPtr, err := ec2.LaunchEC2Instance(ec2Client, instanceName, amiID, instanceType, sgID)
+		instanceIDPtr, err := ec2.LaunchEC2Instance(ec2Client, instanceName, amiID, instanceType, sgID, keyName)
 		if err != nil {
 			fmt.Println("Failed to launch instance from AMI:", err)
 			return
