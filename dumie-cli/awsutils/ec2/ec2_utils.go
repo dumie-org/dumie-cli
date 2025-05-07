@@ -210,3 +210,28 @@ func TerminateInstance(ctx context.Context, client *ec2.Client, instanceID strin
 
 	return nil
 }
+
+func RegisterAMIFromSnapshot(ctx context.Context, client *ec2.Client, snapshotID string) (string, error) {
+	input := &ec2.RegisterImageInput{
+		Name: aws.String(fmt.Sprintf("dumie-ami-from-%s", snapshotID)),
+		BlockDeviceMappings: []types.BlockDeviceMapping{
+			{
+				DeviceName: aws.String("/dev/xvda"),
+				Ebs: &types.EbsBlockDevice{
+					SnapshotId:          aws.String(snapshotID),
+					VolumeType:          types.VolumeTypeGp2,
+					DeleteOnTermination: aws.Bool(true),
+				},
+			},
+		},
+		RootDeviceName:     aws.String("/dev/xvda"),
+		VirtualizationType: aws.String("hvm"),
+	}
+
+	result, err := client.RegisterImage(ctx, input)
+	if err != nil {
+		return "", fmt.Errorf("failed to register AMI from snapshot: %w", err)
+	}
+
+	return *result.ImageId, nil
+}
