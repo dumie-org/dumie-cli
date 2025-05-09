@@ -213,6 +213,23 @@ func TerminateInstance(ctx context.Context, client *ec2.Client, instanceID strin
 }
 
 func RegisterAMIFromSnapshot(ctx context.Context, client *ec2.Client, snapshotID string) (string, error) {
+	name := fmt.Sprintf("dumie-ami-from-%s", snapshotID)
+
+	// check existing ami
+	describeInput := &ec2.DescribeImagesInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("name"),
+				Values: []string{name},
+			},
+		},
+		Owners: []string{"self"},
+	}
+	describeOutput, err := client.DescribeImages(ctx, describeInput)
+	if err == nil && len(describeOutput.Images) > 0 {
+		return *describeOutput.Images[0].ImageId, nil
+	}
+
 	input := &ec2.RegisterImageInput{
 		Name: aws.String(fmt.Sprintf("dumie-ami-from-%s", snapshotID)),
 		BlockDeviceMappings: []types.BlockDeviceMapping{
