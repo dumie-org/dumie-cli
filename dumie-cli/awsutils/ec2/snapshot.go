@@ -69,12 +69,12 @@ func TryRestoreFromSnapshot(ctx context.Context, client *ec2.Client, profile str
 		return "", fmt.Errorf("failed to search snapshot: %w", err)
 	}
 
-	if len(result.Snapshots) == 0 {
-		return "", nil // snapshot 없음 → 새 인스턴스 생성으로 fallback
+	if len(result.Snapshots) == 0 { // No matching snapshot found for profile
+		return "", nil
 	}
 
 	snapshotID := *result.Snapshots[0].SnapshotId
-	fmt.Println("🪄 Found snapshot for profile. Registering AMI from snapshot:", snapshotID)
+	fmt.Println("Found snapshot for profile. Registering AMI from snapshot:", snapshotID)
 
 	// Register AMI
 	amiID, err := RegisterAMIFromSnapshot(ctx, client, snapshotID)
