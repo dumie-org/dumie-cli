@@ -60,6 +60,10 @@ func TryRestoreFromSnapshot(ctx context.Context, client *ec2.Client, profile str
 				Name:   aws.String("tag:Name"),
 				Values: []string{profile},
 			},
+			{
+				Name:   aws.String("tag:ManagedBy"),
+				Values: []string{"Dumie"},
+			},
 		},
 		OwnerIds: []string{"self"},
 	}
@@ -101,4 +105,75 @@ func TryRestoreFromSnapshot(ctx context.Context, client *ec2.Client, profile str
 	}
 
 	return *instanceIDPtr, nil
+}
+
+func DeleteSnapshotAndAMIIfExists(ctx context.Context, client *ec2.Client, snapshotID string, profile string) error {
+	// check AMI using the snapshot
+	describeInput := &ec2.DescribeImagesInput{
+		Owners: []string{"self"},
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("block-device-mapping.snapshot-id"),
+				Values: []string{snapshotID},
+			},
+		},
+	}
+
+	images, err := client.DescribeImages(ctx, describeInput)
+	if err != nil {
+		return fmt.Errorf("failed to describe AMIs: %w", err)
+	}
+
+	// deregister ami
+	for _, image := range images.Images {
+		_, err := client.DeregisterImage(ctx, &ec2.DeregisterImageInput{
+			ImageId: image.ImageId,
+		})
+		if err != nil {
+			fmt.Printf("Warning: failed to deregister AMI [%s]: %v\n", *image.ImageId, err)
+			return err
+		}
+		fmt.Printf("Deregistered AMI [%s] using snapshot [%s]\n", *image.ImageId, snapshotID)
+	}
+
+	// delete snapshot
+	_, err = client.DeleteSnapshot(ctx, &ec2.DeleteSnapshotInput{
+		SnapshotId: aws.String(snapshotID),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete snapshot [%s]: %w", snapshotID, err)
+	}
+
+	fmt.Printf("Deleted old snapshot [%s] for profile [%s]\n", snapshotID, profile)
+	return nil
+}
+
+func DeleteOldSnapshotsByProfile(ctx context.Context, client *ec2.Client, profile string, keepSnapshotID string) error {
+	input := &ec2.DescribeSnapshotsInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("tag:Name"),
+				Values: []string{profile},
+			},
+		},
+		OwnerIds: []string{"self"},
+	}
+
+	result, err := client.DescribeSnapshots(ctx, input)
+	if err != nil {
+		return fmt.Errorf("failed to describe snapshots: %w", err)
+	}
+
+	for _, snap := range result.Snapshots {
+		// keep latest snapshot for future deployment
+		if *snap.SnapshotId == keepSnapshotID {
+			continue
+		}
+		err := DeleteSnapshotAndAMIIfExists(ctx, client, *snap.SnapshotId, profile)
+		if err != nil {
+			fmt.Printf("Warning: failed to delete snapshot [%s]: %v\n", *snap.SnapshotId, err)
+		}
+	}
+
+	return nil
 }
