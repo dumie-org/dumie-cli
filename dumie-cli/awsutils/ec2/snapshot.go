@@ -155,6 +155,10 @@ func DeleteOldSnapshotsByProfile(ctx context.Context, client *ec2.Client, profil
 				Name:   aws.String("tag:Name"),
 				Values: []string{profile},
 			},
+			{
+				Name:   aws.String("tag:ManagedBy"),
+				Values: []string{"Dumie"},
+			},
 		},
 		OwnerIds: []string{"self"},
 	}
