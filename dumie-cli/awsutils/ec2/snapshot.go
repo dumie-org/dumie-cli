@@ -93,7 +93,7 @@ func TryRestoreFromSnapshot(ctx context.Context, client *ec2.Client, profile str
 	}
 
 	// Get Pem Key
-	keyName, err := common.GenerateKeyPair(client)
+	keyName, err := common.GetKeyPairName()
 	if err != nil {
 		return "", fmt.Errorf("Error getting key pair name: %v\n", err)
 	}

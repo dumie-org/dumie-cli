@@ -29,6 +29,7 @@ func GenerateKeyPair(client *ec2.Client) (string, error) {
 		return "", fmt.Errorf("failed to get key pair name: %v", err)
 	}
 
+	// Use existing key pair from config
 	if existingKeyName != "" {
 		return existingKeyName, nil
 	}
@@ -72,8 +73,7 @@ func GenerateKeyPair(client *ec2.Client) (string, error) {
 func GetKeyPairName() (string, error) {
 	config, err := awsutils.LoadAWSConfig()
 	if err != nil {
-		return "", fmt.Errorf("failed to load config: %v", err)
+		return "", fmt.Errorf("failed to load config: %v (hint: run `dumie configure` first)", err)
 	}
-
 	return config.KeyPairName, nil
 }

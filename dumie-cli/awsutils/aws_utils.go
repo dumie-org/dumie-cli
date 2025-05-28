@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/dumie-org/dumie-cli/awsutils/common"
 	"os"
 
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -22,11 +23,9 @@ type AWSConfig struct {
 	KeyPairName     string `json:"key_pair_name"`
 }
 
-const configFilePath = "aws_config.json"
-
 // LoadAWSConfig loads the AWS configuration from the config file
 func LoadAWSConfig() (*AWSConfig, error) {
-	file, err := os.Open(configFilePath)
+	file, err := os.Open(common.ConfigFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("error opening config file: %w", err)
 	}

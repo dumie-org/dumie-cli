@@ -68,7 +68,7 @@ func launchNewInstance(ctx context.Context, client *ec2.Client, profile string) 
 		return "", fmt.Errorf("failed to get security group: %w", err)
 	}
 
-	keyName, err := common.GenerateKeyPair(client)
+	keyName, err := common.GetKeyPairName()
 	if err != nil {
 		return "", fmt.Errorf("failed to get key pair: %w", err)
 	}
