@@ -60,12 +60,6 @@ var deleteCmd = &cobra.Command{
 			return
 		}
 		fmt.Printf("Instance [%s] (profile: %s) terminated successfully.\n", instanceID, profile)
-
-		// Delete outdated snapshots (keep the one just created)
-		err = ec2.DeleteOldSnapshotsByProfile(ctx, ec2Client, profile, snapshotID)
-		if err != nil {
-			fmt.Println("Warning: failed to delete old snapshots:", err)
-		}
 	},
 }
 

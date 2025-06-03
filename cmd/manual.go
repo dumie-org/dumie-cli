@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dumie-org/dumie-cli/internal/aws"
 	"github.com/dumie-org/dumie-cli/internal/aws/ec2"
 	"github.com/spf13/cobra"
 )
@@ -26,6 +27,17 @@ var manualCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Instance [%s] launched successfully for profile [%s]\n", instanceID, profile)
+
+		ec2Client, err := aws.GetEC2AWSClient()
+		if err != nil {
+			fmt.Println("Failed to create EC2 client:", err)
+			return
+		}
+
+		err = ec2.DeleteOldSnapshotsByProfile(ctx, ec2Client, profile)
+		if err != nil {
+			fmt.Println("Warning: failed to delete old snapshots:", err)
+		}
 	},
 }
 

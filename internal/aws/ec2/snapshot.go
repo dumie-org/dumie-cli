@@ -149,7 +149,7 @@ func DeleteSnapshotAndAMIIfExists(ctx context.Context, client *ec2.Client, snaps
 	return nil
 }
 
-func DeleteOldSnapshotsByProfile(ctx context.Context, client *ec2.Client, profile string, keepSnapshotID string) error {
+func DeleteOldSnapshotsByProfile(ctx context.Context, client *ec2.Client, profile string) error {
 	input := &ec2.DescribeSnapshotsInput{
 		Filters: []types.Filter{
 			{
@@ -170,10 +170,6 @@ func DeleteOldSnapshotsByProfile(ctx context.Context, client *ec2.Client, profil
 	}
 
 	for _, snap := range result.Snapshots {
-		// keep latest snapshot for future deployment
-		if *snap.SnapshotId == keepSnapshotID {
-			continue
-		}
 		err := DeleteSnapshotAndAMIIfExists(ctx, client, *snap.SnapshotId, profile)
 		if err != nil {
 			fmt.Printf("Warning: failed to delete snapshot [%s]: %v\n", *snap.SnapshotId, err)
