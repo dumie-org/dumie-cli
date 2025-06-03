@@ -181,3 +181,75 @@ func GetLatestAmazonLinuxAMI(client *ec2.Client) (string, error) {
 
 	return *latestImage.ImageId, nil
 }
+
+func GetRootVolumeID(ctx context.Context, client *ec2.Client, instanceID string) (string, error) {
+	output, err := client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
+		InstanceIds: []string{instanceID},
+	})
+	if err != nil || len(output.Reservations) == 0 || len(output.Reservations[0].Instances) == 0 {
+		return "", fmt.Errorf("could not find instance: %w", err)
+	}
+
+	for _, mapping := range output.Reservations[0].Instances[0].BlockDeviceMappings {
+		if mapping.DeviceName != nil && *mapping.DeviceName == "/dev/xvda" {
+			return *mapping.Ebs.VolumeId, nil
+		}
+	}
+
+	return "", fmt.Errorf("root volume not found")
+}
+
+func TerminateInstance(ctx context.Context, client *ec2.Client, instanceID string) error {
+	input := &ec2.TerminateInstancesInput{
+		InstanceIds: []string{instanceID},
+	}
+
+	_, err := client.TerminateInstances(ctx, input)
+	if err != nil {
+		return fmt.Errorf("failed to terminate instance %s: %w", instanceID, err)
+	}
+
+	return nil
+}
+
+func RegisterAMIFromSnapshot(ctx context.Context, client *ec2.Client, snapshotID string) (string, error) {
+	name := fmt.Sprintf("dumie-ami-from-%s", snapshotID)
+
+	// check existing ami
+	describeInput := &ec2.DescribeImagesInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("name"),
+				Values: []string{name},
+			},
+		},
+		Owners: []string{"self"},
+	}
+	describeOutput, err := client.DescribeImages(ctx, describeInput)
+	if err == nil && len(describeOutput.Images) > 0 {
+		return *describeOutput.Images[0].ImageId, nil
+	}
+
+	input := &ec2.RegisterImageInput{
+		Name: aws.String(fmt.Sprintf("dumie-ami-from-%s", snapshotID)),
+		BlockDeviceMappings: []types.BlockDeviceMapping{
+			{
+				DeviceName: aws.String("/dev/xvda"),
+				Ebs: &types.EbsBlockDevice{
+					SnapshotId:          aws.String(snapshotID),
+					VolumeType:          types.VolumeTypeGp2,
+					DeleteOnTermination: aws.Bool(true),
+				},
+			},
+		},
+		RootDeviceName:     aws.String("/dev/xvda"),
+		VirtualizationType: aws.String("hvm"),
+	}
+
+	result, err := client.RegisterImage(ctx, input)
+	if err != nil {
+		return "", fmt.Errorf("failed to register AMI from snapshot: %w", err)
+	}
+
+	return *result.ImageId, nil
+}

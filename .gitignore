@@ -1,0 +1,4 @@
+*.pem
+.idea/
+dumie
+aws_config.json
