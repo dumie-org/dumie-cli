@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dumie-org/dumie-cli/internal/aws"
 	"github.com/dumie-org/dumie-cli/internal/aws/common"
 	"github.com/dumie-org/dumie-cli/internal/aws/ddb"
 	"github.com/spf13/cobra"
@@ -65,7 +64,7 @@ func promptForInput(prompt, defaultValue string) string {
 func configureDynamoDBLockTable() error {
 	fmt.Println("Now initializing DynamoDB lock table...")
 
-	client, err := aws.GetDynamoDBClient()
+	client, err := common.GetDynamoDBClient()
 	if err != nil {
 		fmt.Printf("Error getting AWS client: %v\n", err)
 		return err
@@ -97,7 +96,7 @@ func configureDynamoDBLockTable() error {
 func configureEC2KeyPair() error {
 	fmt.Println("Configuring EC2 key pair...")
 
-	client, err := aws.GetEC2AWSClient()
+	client, err := common.GetEC2AWSClient()
 	if err != nil {
 		return fmt.Errorf("error creating AWS client: %v", err)
 	}

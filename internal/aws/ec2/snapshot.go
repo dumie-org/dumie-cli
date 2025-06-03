@@ -149,7 +149,12 @@ func DeleteSnapshotAndAMIIfExists(ctx context.Context, client *ec2.Client, snaps
 	return nil
 }
 
-func DeleteOldSnapshotsByProfile(ctx context.Context, client *ec2.Client, profile string) error {
+func DeleteOldSnapshotsByProfile(ctx context.Context, profile string) error {
+	client, err := common.GetEC2AWSClient()
+	if err != nil {
+		return fmt.Errorf("failed to create EC2 client: %w", err)
+	}
+
 	input := &ec2.DescribeSnapshotsInput{
 		Filters: []types.Filter{
 			{

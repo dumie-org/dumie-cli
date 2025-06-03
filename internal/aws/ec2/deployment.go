@@ -7,13 +7,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/dumie-org/dumie-cli/internal/aws"
 	"github.com/dumie-org/dumie-cli/internal/aws/common"
 	"github.com/dumie-org/dumie-cli/internal/aws/ddb"
 )
 
 func RestoreOrCreateInstance(ctx context.Context, profile string) (string, error) {
-	lockClient, err := aws.GetDynamoDBClient()
+	lockClient, err := common.GetDynamoDBClient()
 	if err != nil {
 		return "", fmt.Errorf("failed to get DDB client: %w", err)
 	}
@@ -29,7 +28,7 @@ func RestoreOrCreateInstance(ctx context.Context, profile string) (string, error
 		}
 	}()
 
-	client, err := aws.GetEC2AWSClient()
+	client, err := common.GetEC2AWSClient()
 	if err != nil {
 		return "", fmt.Errorf("failed to get EC2 client: %w", err)
 	}

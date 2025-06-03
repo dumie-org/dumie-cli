@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dumie-org/dumie-cli/internal/aws"
+	"github.com/dumie-org/dumie-cli/internal/aws/common"
 	"github.com/dumie-org/dumie-cli/internal/aws/ec2"
 	"github.com/spf13/cobra"
 )
@@ -19,7 +19,7 @@ var deleteCmd = &cobra.Command{
 		ctx := context.TODO()
 
 		// Create EC2 Client
-		ec2Client, err := aws.GetEC2AWSClient()
+		ec2Client, err := common.GetEC2AWSClient()
 		if err != nil {
 			fmt.Println("Failed to create EC2 client:", err)
 			return
