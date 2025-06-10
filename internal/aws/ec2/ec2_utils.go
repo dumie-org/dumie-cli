@@ -253,3 +253,23 @@ func RegisterAMIFromSnapshot(ctx context.Context, client *ec2.Client, snapshotID
 
 	return *result.ImageId, nil
 }
+
+func GetInstancePublicDNS(client *ec2.Client, instanceID string) (string, error) {
+	result, err := client.DescribeInstances(context.TODO(), &ec2.DescribeInstancesInput{
+		InstanceIds: []string{instanceID},
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to describe instance: %w", err)
+	}
+
+	if len(result.Reservations) == 0 || len(result.Reservations[0].Instances) == 0 {
+		return "", fmt.Errorf("instance not found: %s", instanceID)
+	}
+
+	instance := result.Reservations[0].Instances[0]
+	if instance.PublicDnsName == nil {
+		return "", nil
+	}
+
+	return *instance.PublicDnsName, nil
+}
