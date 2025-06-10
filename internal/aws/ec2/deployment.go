@@ -73,7 +73,7 @@ func launchNewInstance(ctx context.Context, client *ec2.Client, profile string) 
 		return "", fmt.Errorf("failed to get key pair: %w", err)
 	}
 
-	instanceIDPtr, err := LaunchEC2Instance(client, profile, amiID, types.InstanceTypeT2Micro, sgID, keyName)
+	instanceIDPtr, err := LaunchEC2Instance(client, profile, amiID, types.InstanceTypeT2Micro, sgID, keyName, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to launch instance: %w", err)
 	}
