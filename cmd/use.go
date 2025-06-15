@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/dumie-org/dumie-cli/internal/aws/common"
+	"github.com/dumie-org/dumie-cli/internal/aws/ddb"
 	ec2utils "github.com/dumie-org/dumie-cli/internal/aws/ec2"
 	"github.com/dumie-org/dumie-cli/internal/aws/iam"
 	"github.com/spf13/cobra"
@@ -64,6 +65,38 @@ If an instance exists, it will connect to it.`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		profile := args[0]
+		ctx := context.TODO()
+
+		// Initialize DynamoDB lock
+		ddbClient, err := common.GetDynamoDBAWSClient()
+		if err != nil {
+			fmt.Printf("Failed to get DynamoDB client: %v\n", err)
+			return
+		}
+
+		lock := ddb.NewDynamoDBLock(ddbClient)
+
+		// Check if table exists, create if it doesn't
+		exists, err := ddb.SearchDynamoDBLockTable(ddbClient)
+		if err != nil {
+			fmt.Printf("Failed to check lock table: %v\n", err)
+			return
+		}
+		if !exists {
+			if err := lock.CreateLockTable(ctx); err != nil {
+				fmt.Printf("Failed to create lock table: %v\n", err)
+				return
+			}
+		}
+
+		// Try to acquire lock for this profile
+		lockID := fmt.Sprintf("profile-%s", profile)
+		if err := lock.AcquireLock(ctx, lockID); err != nil {
+			fmt.Printf("Cannot connect to instance: %v\n", err)
+			return
+		}
+		defer lock.ReleaseLock(ctx, lockID)
+
 		ec2Client, err := common.GetEC2AWSClient()
 		if err != nil {
 			fmt.Printf("Failed to get EC2 client: %v\n", err)
@@ -98,7 +131,7 @@ If an instance exists, it will connect to it.`,
 			return
 		}
 
-		err = ec2utils.DeleteOldSnapshotsByProfile(context.TODO(), profile)
+		err = ec2utils.DeleteOldSnapshotsByProfile(ctx, profile)
 		if err != nil {
 			fmt.Println("Warning: failed to delete old snapshots:", err)
 		}

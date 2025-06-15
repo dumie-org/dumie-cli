@@ -17,6 +17,34 @@ while true; do
     if [ "$no_ssh_count" -ge 60 ]; then  # 1 minute (60 seconds)
       echo "$(date): No SSH sessions for 1 minute. Creating AMI and snapshot before termination..." >> "$log_file"
       
+      # Get profile name from instance tags
+      PROFILE=$(aws ec2 describe-instances \
+        --region $REGION \
+        --instance-ids $INSTANCE_ID \
+        --query 'Reservations[0].Instances[0].Tags[?Key==`Name`].Value' \
+        --output text)
+
+      # Acquire lock for this profile
+      LOCK_ID="profile-$PROFILE"
+      echo "$(date): Attempting to acquire lock for profile $PROFILE..." >> "$log_file"
+      
+      aws dynamodb put-item \
+        --region $REGION \
+        --table-name dumie-lock-table \
+        --item '{
+          "LockID": {"S": "'$LOCK_ID'"},
+          "Expires": {"N": "'$(($(date +%s) + 300))'"}
+        }' \
+        --condition-expression "attribute_not_exists(LockID) OR Expires < :now" \
+        --expression-attribute-values '{":now": {"N": "'$(date +%s)'"}}'
+
+      if [ $? -ne 0 ]; then
+        echo "$(date): Failed to acquire lock for profile $PROFILE. Another process might be using this profile." >> "$log_file"
+        exit 1
+      fi
+
+      echo "$(date): Successfully acquired lock for profile $PROFILE" >> "$log_file"
+      
       # Create AMI
       AMI_ID=$(aws ec2 create-image \
         --region $REGION \
@@ -43,13 +71,6 @@ while true; do
         if [ $? -eq 0 ]; then
           echo "$(date): Created snapshot $SNAPSHOT_ID from AMI" >> "$log_file"
           
-          # Get profile name from instance tags right before tagging the snapshot
-          PROFILE=$(aws ec2 describe-instances \
-            --region $REGION \
-            --instance-ids $INSTANCE_ID \
-            --query 'Reservations[0].Instances[0].Tags[?Key==`Name`].Value' \
-            --output text)
-          
           # Tag the snapshot
           aws ec2 create-tags \
             --region $REGION \
@@ -68,6 +89,20 @@ while true; do
       # Terminate the instance
       aws ec2 terminate-instances --region $REGION --instance-ids $INSTANCE_ID
       echo "$(date): Terminated instance $INSTANCE_ID" >> "$log_file"
+
+      # Release the lock
+      echo "$(date): Releasing lock for profile $PROFILE..." >> "$log_file"
+      aws dynamodb delete-item \
+        --region $REGION \
+        --table-name dumie-lock-table \
+        --key '{"LockID": {"S": "'$LOCK_ID'"}}'
+      
+      if [ $? -eq 0 ]; then
+        echo "$(date): Successfully released lock for profile $PROFILE" >> "$log_file"
+      else
+        echo "$(date): Warning: Failed to release lock for profile $PROFILE" >> "$log_file"
+      fi
+
       exit 0
     fi
   else
