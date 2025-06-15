@@ -42,7 +42,7 @@ func RestoreOrCreateInstance(ctx context.Context, profile string, userDataPath *
 	}
 
 	// Try restore from snapshot
-	instanceID, err := TryRestoreFromSnapshot(ctx, client, profile)
+	instanceID, err := TryRestoreFromSnapshot(ctx, client, profile, iamRoleARN)
 	if err != nil {
 		return "", err
 	}

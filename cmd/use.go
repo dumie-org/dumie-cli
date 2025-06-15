@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/dumie-org/dumie-cli/internal/aws/common"
 	"github.com/dumie-org/dumie-cli/internal/aws/ddb"
@@ -89,11 +90,26 @@ If an instance exists, it will connect to it.`,
 			}
 		}
 
-		// Try to acquire lock for this profile
+		// Try to acquire lock for this profile with retry
 		lockID := fmt.Sprintf("profile-%s", profile)
-		if err := lock.AcquireLock(ctx, lockID); err != nil {
-			fmt.Printf("Cannot connect to instance: %v\n", err)
-			return
+		startTime := time.Now()
+		maxRetryTime := 10 * time.Minute
+		retryInterval := 5 * time.Second
+
+		for {
+			err := lock.AcquireLock(ctx, lockID)
+			if err == nil {
+				break
+			}
+
+			elapsed := time.Since(startTime)
+			if elapsed >= maxRetryTime {
+				fmt.Printf("Failed to acquire lock after %v: %v\n", maxRetryTime, err)
+				return
+			}
+
+			fmt.Printf("The instance is being created or in the termination process. Retrying to connect to the instance... (elapsed: %v)\n", elapsed.Round(time.Second))
+			time.Sleep(retryInterval)
 		}
 		defer lock.ReleaseLock(ctx, lockID)
 

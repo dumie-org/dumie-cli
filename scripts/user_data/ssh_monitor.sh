@@ -4,11 +4,41 @@ cat << "EOF" > /usr/local/bin/ssh_monitor.sh
 #!/bin/bash
 
 # Get instance metadata
-INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
 REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
 
 log_file="/home/ec2-user/active.log"
 no_ssh_count=0
+
+# Function to release lock with retries
+release_lock() {
+    local lock_id=$1
+    local max_retries=3
+    local retry_interval=2
+    local retry_count=0
+
+    while [ $retry_count -lt $max_retries ]; do
+        echo "$(date): Attempting to release lock for profile $PROFILE (attempt $((retry_count + 1))/$max_retries)..." >> "$log_file"
+        
+        aws dynamodb delete-item \
+            --region $REGION \
+            --table-name dumie-lock-table \
+            --key '{"LockID": {"S": "'$lock_id'"}}'
+
+        if [ $? -eq 0 ]; then
+            echo "$(date): Successfully released lock for profile $PROFILE" >> "$log_file"
+            return 0
+        fi
+
+        retry_count=$((retry_count + 1))
+        if [ $retry_count -lt $max_retries ]; then
+            echo "$(date): Failed to release lock, retrying in ${retry_interval}s..." >> "$log_file"
+            sleep $retry_interval
+        fi
+    done
+
+    echo "$(date): ERROR: Failed to release lock after $max_retries attempts" >> "$log_file"
+    return 1
+}
 
 while true; do
   active_users=$(who | grep -c 'pts/')
@@ -17,12 +47,30 @@ while true; do
     if [ "$no_ssh_count" -ge 60 ]; then  # 1 minute (60 seconds)
       echo "$(date): No SSH sessions for 1 minute. Creating AMI and snapshot before termination..." >> "$log_file"
       
+      # Get current instance ID when starting termination
+      INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+      echo "$(date): Current instance ID: $INSTANCE_ID" >> "$log_file"
+      
       # Get profile name from instance tags
       PROFILE=$(aws ec2 describe-instances \
         --region $REGION \
         --instance-ids $INSTANCE_ID \
         --query 'Reservations[0].Instances[0].Tags[?Key==`Name`].Value' \
         --output text)
+
+      if [ -z "$PROFILE" ]; then
+        echo "$(date): ERROR: Failed to get profile name from instance tags. Instance ID: $INSTANCE_ID" >> "$log_file"
+        # Dump instance tags for debugging
+        echo "$(date): Dumping instance tags for debugging:" >> "$log_file"
+        aws ec2 describe-instances \
+          --region $REGION \
+          --instance-ids $INSTANCE_ID \
+          --query 'Reservations[0].Instances[0].Tags' \
+          --output json >> "$log_file"
+        exit 1
+      fi
+
+      echo "$(date): Retrieved profile name: $PROFILE" >> "$log_file"
 
       # Acquire lock for this profile
       LOCK_ID="profile-$PROFILE"
@@ -85,24 +133,15 @@ while true; do
           echo "$(date): Deregistered AMI $AMI_ID" >> "$log_file"
         fi
       fi
+
+      # Release the lock before terminating the instance
+      echo "$(date): Releasing lock before terminating instance..." >> "$log_file"
+      release_lock "$LOCK_ID"
       
       # Terminate the instance
       aws ec2 terminate-instances --region $REGION --instance-ids $INSTANCE_ID
       echo "$(date): Terminated instance $INSTANCE_ID" >> "$log_file"
-
-      # Release the lock
-      echo "$(date): Releasing lock for profile $PROFILE..." >> "$log_file"
-      aws dynamodb delete-item \
-        --region $REGION \
-        --table-name dumie-lock-table \
-        --key '{"LockID": {"S": "'$LOCK_ID'"}}'
       
-      if [ $? -eq 0 ]; then
-        echo "$(date): Successfully released lock for profile $PROFILE" >> "$log_file"
-      else
-        echo "$(date): Warning: Failed to release lock for profile $PROFILE" >> "$log_file"
-      fi
-
       exit 0
     fi
   else
