@@ -25,7 +25,6 @@ If an instance exists, it will connect to it.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		profile := args[0]
 
-		// Get AWS config and clients
 		cfgData, err := common.LoadAWSConfig()
 		if err != nil {
 			fmt.Printf("Failed to get AWS config: %v\n", err)
@@ -43,7 +42,6 @@ If an instance exists, it will connect to it.`,
 
 		ec2Client := ec2.NewFromConfig(awsCfg)
 
-		// Check if instance exists
 		instanceIDPtr, err := ec2utils.SearchEC2Instance(ec2Client, profile)
 		if err != nil {
 			fmt.Printf("Failed to find instance: %v\n", err)
@@ -52,31 +50,26 @@ If an instance exists, it will connect to it.`,
 
 		var instanceID string
 		if instanceIDPtr == nil {
-			// No instance exists, create one
 			fmt.Printf("No instance found for profile [%s]. Creating new instance...\n", profile)
 
-			// Get AMI ID
 			amiID, err := ec2utils.GetLatestAmazonLinuxAMI(ec2Client)
 			if err != nil {
 				fmt.Printf("Failed to get AMI ID: %v\n", err)
 				return
 			}
 
-			// Create security group
 			sgID, err := ec2utils.CreateOrGetSecurityGroup(ec2Client, profile)
 			if err != nil {
 				fmt.Printf("Failed to create security group: %v\n", err)
 				return
 			}
 
-			// Get key pair name
 			keyName, err := common.GetKeyPairName()
 			if err != nil {
 				fmt.Printf("Failed to get key pair name: %v\n", err)
 				return
 			}
 
-			// Launch instance with SSH monitoring script
 			userDataPath := "scripts/user_data/ssh_monitor.sh"
 			instanceIDPtr, err = ec2utils.LaunchEC2Instance(ec2Client, profile, amiID, types.InstanceTypeT2Micro, sgID, keyName, &userDataPath)
 			if err != nil {
@@ -88,7 +81,6 @@ If an instance exists, it will connect to it.`,
 			instanceID = *instanceIDPtr
 		}
 
-		// Get instance details
 		instanceDetails, err := ec2Client.DescribeInstances(context.TODO(), &ec2.DescribeInstancesInput{
 			InstanceIds: []string{instanceID},
 		})
