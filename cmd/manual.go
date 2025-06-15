@@ -19,9 +19,9 @@ var manualCmd = &cobra.Command{
 		profile := args[0]
 		ctx := context.TODO()
 
-		instanceID, err := ec2.RestoreOrCreateInstance(ctx, profile)
+		instanceID, err := ec2.RestoreOrCreateInstance(ctx, profile, nil, nil)
 		if err != nil {
-			fmt.Println("Failed to deploy instance:", err)
+			fmt.Printf("Failed to create/restore instance: %v\n", err)
 			return
 		}
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/dumie-org/dumie-cli/internal/aws/common"
 	"github.com/dumie-org/dumie-cli/internal/aws/ddb"
+	"github.com/dumie-org/dumie-cli/internal/aws/iam"
 	"github.com/spf13/cobra"
 )
 
@@ -129,6 +130,23 @@ func configureEC2KeyPair() error {
 	return nil
 }
 
+func configureIAMRole() error {
+	fmt.Println("Configuring IAM role for instance management...")
+
+	client, err := common.GetIAMClient()
+	if err != nil {
+		return fmt.Errorf("error creating IAM client: %v", err)
+	}
+
+	err = iam.CreateInstanceManagerRole(client)
+	if err != nil {
+		return fmt.Errorf("error creating IAM role: %v", err)
+	}
+
+	fmt.Println("Successfully configured IAM role.")
+	return nil
+}
+
 var configureCmd = &cobra.Command{
 	Use:   "configure",
 	Short: "Configure Dumie manager to integrate with AWS",
@@ -178,6 +196,12 @@ var configureCmd = &cobra.Command{
 		err = configureEC2KeyPair()
 		if err != nil {
 			fmt.Printf("Error configuring EC2 key pair: %v\n", err)
+			return
+		}
+
+		err = configureIAMRole()
+		if err != nil {
+			fmt.Printf("Error configuring IAM role: %v\n", err)
 			return
 		}
 

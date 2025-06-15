@@ -53,7 +53,7 @@ func (s *SnapshotManager) CreateSnapshot(ctx context.Context, volumeID, instance
 	return *result.SnapshotId, nil
 }
 
-func TryRestoreFromSnapshot(ctx context.Context, client *ec2.Client, profile string) (string, error) {
+func TryRestoreFromSnapshot(ctx context.Context, client *ec2.Client, profile string, iamRoleARN *string) (string, error) {
 	// Find Snapshot (tag:Name = profile)
 	describeSnapshotsInput := &ec2.DescribeSnapshotsInput{
 		Filters: []types.Filter{
@@ -96,13 +96,13 @@ func TryRestoreFromSnapshot(ctx context.Context, client *ec2.Client, profile str
 	// Get Pem Key
 	keyName, err := common.GetKeyPairName()
 	if err != nil {
-		return "", fmt.Errorf("Error getting key pair name: %v\n", err)
+		return "", fmt.Errorf("error getting key pair name: %v", err)
 	}
 
 	// Launch EC2 Instance
-	instanceIDPtr, err := LaunchEC2Instance(client, profile, amiID, types.InstanceTypeT2Micro, sgID, keyName)
+	instanceIDPtr, err := LaunchEC2Instance(client, profile, amiID, types.InstanceTypeT2Micro, sgID, keyName, nil, iamRoleARN)
 	if err != nil {
-		return "", fmt.Errorf("failed to launch instance from snapshot: %w", err)
+		return "", fmt.Errorf("failed to launch instance: %w", err)
 	}
 
 	return *instanceIDPtr, nil

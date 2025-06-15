@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 )
 
 type AWSConfig struct {
@@ -99,5 +100,29 @@ func GetDynamoDBClient() (*dynamodb.Client, error) {
 
 	client := dynamodb.NewFromConfig(awsCfg)
 	fmt.Println("Retrieved client:", client)
+	return client, nil
+}
+
+func GetIAMClient() (*iam.Client, error) {
+	cfgData, err := LoadAWSConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	awsCfg, err := config.LoadDefaultConfig(
+		context.TODO(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			cfgData.AccessKeyID,
+			cfgData.SecretAccessKey,
+			"",
+		)),
+		config.WithRegion(cfgData.Region),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to load AWS SDK config: %w", err)
+	}
+
+	client := iam.NewFromConfig(awsCfg)
+	fmt.Println("Retrieved IAM client:", client)
 	return client, nil
 }
