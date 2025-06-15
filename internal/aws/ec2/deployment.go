@@ -11,7 +11,7 @@ import (
 	"github.com/dumie-org/dumie-cli/internal/aws/ddb"
 )
 
-func RestoreOrCreateInstance(ctx context.Context, profile string) (string, error) {
+func RestoreOrCreateInstance(ctx context.Context, profile string, userDataPath *string, iamRoleARN *string) (string, error) {
 	lockClient, err := common.GetDynamoDBClient()
 	if err != nil {
 		return "", fmt.Errorf("failed to get DDB client: %w", err)
@@ -52,10 +52,10 @@ func RestoreOrCreateInstance(ctx context.Context, profile string) (string, error
 	}
 
 	// Launch new instance
-	return launchNewInstance(ctx, client, profile)
+	return launchNewInstance(ctx, client, profile, userDataPath, iamRoleARN)
 }
 
-func launchNewInstance(ctx context.Context, client *ec2.Client, profile string) (string, error) {
+func launchNewInstance(ctx context.Context, client *ec2.Client, profile string, userDataPath *string, iamRoleARN *string) (string, error) {
 	fmt.Println("No snapshot found. Launching fresh instance.")
 
 	amiID, err := GetLatestAmazonLinuxAMI(client)
@@ -73,7 +73,7 @@ func launchNewInstance(ctx context.Context, client *ec2.Client, profile string) 
 		return "", fmt.Errorf("failed to get key pair: %w", err)
 	}
 
-	instanceIDPtr, err := LaunchEC2Instance(client, profile, amiID, types.InstanceTypeT2Micro, sgID, keyName, nil)
+	instanceIDPtr, err := LaunchEC2Instance(client, profile, amiID, types.InstanceTypeT2Micro, sgID, keyName, userDataPath, iamRoleARN)
 	if err != nil {
 		return "", fmt.Errorf("failed to launch instance: %w", err)
 	}

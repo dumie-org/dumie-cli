@@ -9,9 +9,9 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/dumie-org/dumie-cli/internal/aws/common"
 	ec2utils "github.com/dumie-org/dumie-cli/internal/aws/ec2"
+	"github.com/dumie-org/dumie-cli/internal/aws/iam"
 	"github.com/spf13/cobra"
 )
 
@@ -52,31 +52,28 @@ If an instance exists, it will connect to it.`,
 		if instanceIDPtr == nil {
 			fmt.Printf("No instance found for profile [%s]. Creating new instance...\n", profile)
 
-			amiID, err := ec2utils.GetLatestAmazonLinuxAMI(ec2Client)
+			// Get IAM role ARN
+			iamClient, err := common.GetIAMClient()
 			if err != nil {
-				fmt.Printf("Failed to get AMI ID: %v\n", err)
+				fmt.Printf("Failed to get IAM client: %v\n", err)
 				return
 			}
 
-			sgID, err := ec2utils.CreateOrGetSecurityGroup(ec2Client, profile)
+			roleARN, err := iam.GetInstanceManagerRoleARN(iamClient)
 			if err != nil {
-				fmt.Printf("Failed to create security group: %v\n", err)
+				fmt.Printf("Failed to get IAM role ARN: %v\n", err)
 				return
 			}
 
-			keyName, err := common.GetKeyPairName()
-			if err != nil {
-				fmt.Printf("Failed to get key pair name: %v\n", err)
-				return
-			}
+			// Set user data script path
+			userDataPath := filepath.Join("scripts", "user_data", "ssh_monitor.sh")
 
-			userDataPath := "scripts/user_data/ssh_monitor.sh"
-			instanceIDPtr, err = ec2utils.LaunchEC2Instance(ec2Client, profile, amiID, types.InstanceTypeT2Micro, sgID, keyName, &userDataPath)
+			// Create or restore instance with IAM role and user data
+			instanceID, err = ec2utils.RestoreOrCreateInstance(context.TODO(), profile, &userDataPath, &roleARN)
 			if err != nil {
 				fmt.Printf("Failed to launch instance: %v\n", err)
 				return
 			}
-			instanceID = *instanceIDPtr
 		} else {
 			instanceID = *instanceIDPtr
 		}

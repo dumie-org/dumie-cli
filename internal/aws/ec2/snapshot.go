@@ -100,9 +100,9 @@ func TryRestoreFromSnapshot(ctx context.Context, client *ec2.Client, profile str
 	}
 
 	// Launch EC2 Instance
-	instanceIDPtr, err := LaunchEC2Instance(client, profile, amiID, types.InstanceTypeT2Micro, sgID, keyName, nil)
+	instanceIDPtr, err := LaunchEC2Instance(client, profile, amiID, types.InstanceTypeT2Micro, sgID, keyName, nil, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to launch instance from snapshot: %w", err)
+		return "", fmt.Errorf("failed to launch instance: %w", err)
 	}
 
 	return *instanceIDPtr, nil
