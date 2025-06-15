@@ -1,7 +1,11 @@
 #!/bin/bash
 
-cat << 'EOF' > /usr/local/bin/ssh_monitor.sh
+cat << "EOF" > /usr/local/bin/ssh_monitor.sh
 #!/bin/bash
+
+# Get instance metadata
+INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
 
 log_file="/home/ec2-user/active.log"
 no_ssh_count=0
@@ -10,9 +14,61 @@ while true; do
   active_users=$(who | grep -c 'pts/')
   if [ "$active_users" -eq 0 ]; then
     ((no_ssh_count++))
-    if [ "$no_ssh_count" -ge 10 ]; then
-      echo "$(date): No SSH sessions for 10 seconds" >> "$log_file"
-      no_ssh_count=0
+    if [ "$no_ssh_count" -ge 60 ]; then  # 1 minute (60 seconds)
+      echo "$(date): No SSH sessions for 1 minute. Creating AMI and snapshot before termination..." >> "$log_file"
+      
+      # Create AMI
+      AMI_ID=$(aws ec2 create-image \
+        --region $REGION \
+        --instance-id $INSTANCE_ID \
+        --name "dumie-ami-from-$INSTANCE_ID" \
+        --description "AMI created before terminating instance $INSTANCE_ID" \
+        --no-reboot \
+        --query 'ImageId' \
+        --output text)
+      
+      if [ $? -eq 0 ]; then
+        echo "$(date): Created AMI $AMI_ID" >> "$log_file"
+        
+        # Wait for AMI to be available
+        aws ec2 wait image-available --region $REGION --image-ids $AMI_ID
+        
+        # Get the snapshot ID from the AMI
+        SNAPSHOT_ID=$(aws ec2 describe-images \
+          --region $REGION \
+          --image-ids $AMI_ID \
+          --query 'Images[0].BlockDeviceMappings[0].Ebs.SnapshotId' \
+          --output text)
+        
+        if [ $? -eq 0 ]; then
+          echo "$(date): Created snapshot $SNAPSHOT_ID from AMI" >> "$log_file"
+          
+          # Get profile name from instance tags right before tagging the snapshot
+          PROFILE=$(aws ec2 describe-instances \
+            --region $REGION \
+            --instance-ids $INSTANCE_ID \
+            --query 'Reservations[0].Instances[0].Tags[?Key==`Name`].Value' \
+            --output text)
+          
+          # Tag the snapshot
+          aws ec2 create-tags \
+            --region $REGION \
+            --resources $SNAPSHOT_ID \
+            --tags \
+              "Key=Name,Value=$PROFILE" \
+              "Key=InstanceID,Value=$INSTANCE_ID" \
+              "Key=ManagedBy,Value=Dumie"
+          
+          # Deregister the AMI since we have the snapshot
+          aws ec2 deregister-image --region $REGION --image-id $AMI_ID
+          echo "$(date): Deregistered AMI $AMI_ID" >> "$log_file"
+        fi
+      fi
+      
+      # Terminate the instance
+      aws ec2 terminate-instances --region $REGION --instance-ids $INSTANCE_ID
+      echo "$(date): Terminated instance $INSTANCE_ID" >> "$log_file"
+      exit 0
     fi
   else
     no_ssh_count=0
@@ -26,6 +82,7 @@ chmod +x /usr/local/bin/ssh_monitor.sh
 cat << 'EOF' > /etc/systemd/system/ssh-monitor.service
 [Unit]
 Description=SSH Session Monitor
+After=network.target sshd.service
 
 [Service]
 ExecStart=/usr/local/bin/ssh_monitor.sh
@@ -36,7 +93,6 @@ User=ec2-user
 WantedBy=multi-user.target
 EOF
 
-systemctl daemon-reexec
 systemctl daemon-reload
 systemctl enable ssh-monitor.service
 systemctl start ssh-monitor.service 

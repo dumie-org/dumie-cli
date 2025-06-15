@@ -98,6 +98,11 @@ If an instance exists, it will connect to it.`,
 			return
 		}
 
+		err = ec2utils.DeleteOldSnapshotsByProfile(context.TODO(), profile)
+		if err != nil {
+			fmt.Println("Warning: failed to delete old snapshots:", err)
+		}
+
 		if err := connectToInstance(instanceID, publicDNS); err != nil {
 			fmt.Printf("SSH connection failed: %v\n", err)
 			return
