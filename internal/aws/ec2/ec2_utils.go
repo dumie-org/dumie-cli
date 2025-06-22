@@ -115,6 +115,10 @@ func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanc
 					Key:   aws.String("Name"),
 					Value: aws.String(profile),
 				},
+				{
+					Key:   aws.String("ManagedBy"),
+					Value: aws.String("Dumie"),
+				},
 			},
 		},
 	}
