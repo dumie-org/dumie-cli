@@ -2,10 +2,6 @@ package common
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -36,16 +32,6 @@ func GenerateKeyPair(client *ec2.Client) (string, error) {
 	newKeyName := generateKeyPairName()
 	privateKeyPath := filepath.Join(".", fmt.Sprintf("%s.pem", newKeyName))
 
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate RSA key pair: %v", err)
-	}
-
-	privateKeyPEM := &pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
-	}
-
 	createKeyPairInput := &ec2.CreateKeyPairInput{
 		KeyName: aws.String(newKeyName),
 		KeyType: types.KeyTypeRsa,
@@ -56,13 +42,15 @@ func GenerateKeyPair(client *ec2.Client) (string, error) {
 		return "", fmt.Errorf("failed to create key pair in AWS: %v", err)
 	}
 
+	// Use the private key material returned by AWS
 	privateKeyFile, err := os.OpenFile(privateKeyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return "", fmt.Errorf("failed to create private key file: %v", err)
 	}
 	defer privateKeyFile.Close()
 
-	if err := pem.Encode(privateKeyFile, privateKeyPEM); err != nil {
+	// Write the private key material directly from AWS response
+	if _, err := privateKeyFile.WriteString(*result.KeyMaterial); err != nil {
 		return "", fmt.Errorf("failed to write private key to file: %v", err)
 	}
 

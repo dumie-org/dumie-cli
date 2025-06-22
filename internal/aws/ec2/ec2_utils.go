@@ -5,7 +5,10 @@ package ec2
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"os"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -106,7 +109,18 @@ func SearchEC2Instance(client *ec2.Client, profile string) (*string, error) {
 	return describeInstancesOutput.Reservations[0].Instances[0].InstanceId, nil
 }
 
-func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanceType types.InstanceType, sgID *string, keyName string) (*string, error) {
+func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanceType types.InstanceType, sgID *string, keyName string, userDataPath *string, iamRoleARN *string) (*string, error) {
+	var userData *string
+	if userDataPath != nil {
+		// Load and encode user_data script
+		userDataBytes, err := os.ReadFile(*userDataPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read user_data script: %w", err)
+		}
+		encodedData := base64.StdEncoding.EncodeToString(userDataBytes)
+		userData = &encodedData
+	}
+
 	tags := []types.TagSpecification{
 		{
 			ResourceType: types.ResourceTypeInstance,
@@ -122,6 +136,7 @@ func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanc
 			},
 		},
 	}
+
 	runInstancesInput := &ec2.RunInstancesInput{
 		TagSpecifications: tags,
 		ImageId:           &amiID,
@@ -133,6 +148,17 @@ func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanc
 		},
 		KeyName: aws.String(keyName),
 	}
+
+	if userData != nil {
+		runInstancesInput.UserData = userData
+	}
+
+	if iamRoleARN != nil {
+		runInstancesInput.IamInstanceProfile = &types.IamInstanceProfileSpecification{
+			Name: aws.String("DumieInstanceManagerProfile"),
+		}
+	}
+
 	runInstancesOutput, err := client.RunInstances(context.TODO(), runInstancesInput)
 	if err != nil {
 		return nil, fmt.Errorf("error running instances: %w", err)
@@ -150,7 +176,13 @@ func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanc
 
 func waitForInstanceRunning(ctx context.Context, client *ec2.Client, instanceID string) error {
 	checker := NewEC2StatusChecker(client, instanceID)
-	return common.WaitForResourceStatus(ctx, checker)
+	if err := common.WaitForResourceStatus(ctx, checker); err != nil {
+		return err
+	}
+
+	// Add a delay to allow user data script to complete
+	time.Sleep(30 * time.Second)
+	return nil
 }
 
 func GetLatestAmazonLinuxAMI(client *ec2.Client) (string, error) {
@@ -256,4 +288,24 @@ func RegisterAMIFromSnapshot(ctx context.Context, client *ec2.Client, snapshotID
 	}
 
 	return *result.ImageId, nil
+}
+
+func GetInstancePublicDNS(client *ec2.Client, instanceID string) (string, error) {
+	result, err := client.DescribeInstances(context.TODO(), &ec2.DescribeInstancesInput{
+		InstanceIds: []string{instanceID},
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to describe instance: %w", err)
+	}
+
+	if len(result.Reservations) == 0 || len(result.Reservations[0].Instances) == 0 {
+		return "", fmt.Errorf("instance not found: %s", instanceID)
+	}
+
+	instance := result.Reservations[0].Instances[0]
+	if instance.PublicDnsName == nil {
+		return "", nil
+	}
+
+	return *instance.PublicDnsName, nil
 }
