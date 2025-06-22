@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -109,7 +110,7 @@ func SearchEC2Instance(client *ec2.Client, profile string) (*string, error) {
 	return describeInstancesOutput.Reservations[0].Instances[0].InstanceId, nil
 }
 
-func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanceType types.InstanceType, sgID *string, keyName string, userDataPath *string, iamRoleARN *string) (*string, error) {
+func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanceType types.InstanceType, sgID *string, keyName string, userDataPath *string, iamRoleARN *string, restored bool) (*string, error) {
 	var userData *string
 	if userDataPath != nil {
 		// Load and encode user_data script
@@ -132,6 +133,10 @@ func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanc
 				{
 					Key:   aws.String("ManagedBy"),
 					Value: aws.String("Dumie"),
+				},
+				{
+					Key:   aws.String("Restored"),
+					Value: aws.String(strconv.FormatBool(restored)),
 				},
 			},
 		},
