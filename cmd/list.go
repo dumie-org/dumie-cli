@@ -25,7 +25,7 @@ type ProfileInfo struct {
 
 func printInstanceTable(profiles []ProfileInfo) {
 	fmt.Printf("\n%-20s %-25s %-15s %-18s %-20s\n",
-		"NAME", "INSTANCE ID", "STATUS", "PUBLIC IP", "LAUNCH TIME")
+		"NAME", "INSTANCE ID", "STATE", "PUBLIC IP", "LAUNCH TIME")
 	fmt.Println(strings.Repeat("-", 105))
 
 	for _, p := range profiles {
