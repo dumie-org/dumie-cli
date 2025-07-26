@@ -60,10 +60,13 @@ var statusCmd = &cobra.Command{
 
 		if selected != nil {
 			var source = "base AMI"
+			var timeoutSeconds = "60" // default
 			for _, tag := range selected.Tags {
 				if *tag.Key == "Restored" && *tag.Value == "true" {
 					source = "snapshot"
-					break
+				}
+				if *tag.Key == "TimeoutSeconds" {
+					timeoutSeconds = *tag.Value
 				}
 			}
 
@@ -84,6 +87,7 @@ var statusCmd = &cobra.Command{
 			fmt.Printf("Public IP:   %s\n", publicIP)
 			fmt.Printf("Launch Time: %s\n", launchTime)
 			fmt.Printf("Source:      %s\n", source)
+			fmt.Printf("Timeout:     %s seconds\n", timeoutSeconds)
 		} else {
 			fmt.Println("No active instance found for this profile.")
 			checkSnapshot(ctx, client, profile)

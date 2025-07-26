@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -16,6 +17,19 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/dumie-org/dumie-cli/internal/aws/common"
 )
+
+// InstanceOptions contains all options for creating an EC2 instance
+type InstanceOptions struct {
+	Profile        string
+	AMIID          string
+	InstanceType   types.InstanceType
+	SecurityGroup  *string
+	KeyName        string
+	UserDataPath   *string
+	IAMRoleARN     *string
+	Restored       bool
+	TimeoutSeconds int
+}
 
 func GetDefaultVPCID(client *ec2.Client) (*string, error) {
 	describeVPCsInput := &ec2.DescribeVpcsInput{
@@ -110,15 +124,20 @@ func SearchEC2Instance(client *ec2.Client, profile string) (*string, error) {
 	return describeInstancesOutput.Reservations[0].Instances[0].InstanceId, nil
 }
 
-func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanceType types.InstanceType, sgID *string, keyName string, userDataPath *string, iamRoleARN *string, restored bool) (*string, error) {
+func LaunchEC2Instance(client *ec2.Client, opts InstanceOptions) (*string, error) {
 	var userData *string
-	if userDataPath != nil {
+	if opts.UserDataPath != nil {
 		// Load and encode user_data script
-		userDataBytes, err := os.ReadFile(*userDataPath)
+		userDataBytes, err := os.ReadFile(*opts.UserDataPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read user_data script: %w", err)
 		}
-		encodedData := base64.StdEncoding.EncodeToString(userDataBytes)
+		
+		// Replace the TIMEOUT_SECONDS placeholder in the script
+		scriptContent := string(userDataBytes)
+		scriptContent = strings.ReplaceAll(scriptContent, "TIMEOUT_SECONDS=${TIMEOUT_SECONDS:-60}", fmt.Sprintf("TIMEOUT_SECONDS=%d", opts.TimeoutSeconds))
+		
+		encodedData := base64.StdEncoding.EncodeToString([]byte(scriptContent))
 		userData = &encodedData
 	}
 
@@ -128,7 +147,7 @@ func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanc
 			Tags: []types.Tag{
 				{
 					Key:   aws.String("Name"),
-					Value: aws.String(profile),
+					Value: aws.String(opts.Profile),
 				},
 				{
 					Key:   aws.String("ManagedBy"),
@@ -136,7 +155,11 @@ func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanc
 				},
 				{
 					Key:   aws.String("Restored"),
-					Value: aws.String(strconv.FormatBool(restored)),
+					Value: aws.String(strconv.FormatBool(opts.Restored)),
+				},
+				{
+					Key:   aws.String("TimeoutSeconds"),
+					Value: aws.String(strconv.Itoa(opts.TimeoutSeconds)),
 				},
 			},
 		},
@@ -144,21 +167,21 @@ func LaunchEC2Instance(client *ec2.Client, profile string, amiID string, instanc
 
 	runInstancesInput := &ec2.RunInstancesInput{
 		TagSpecifications: tags,
-		ImageId:           &amiID,
-		InstanceType:      instanceType,
+		ImageId:           &opts.AMIID,
+		InstanceType:      opts.InstanceType,
 		MinCount:          aws.Int32(1),
 		MaxCount:          aws.Int32(1),
 		SecurityGroupIds: []string{
-			*sgID,
+			*opts.SecurityGroup,
 		},
-		KeyName: aws.String(keyName),
+		KeyName: aws.String(opts.KeyName),
 	}
 
 	if userData != nil {
 		runInstancesInput.UserData = userData
 	}
 
-	if iamRoleARN != nil {
+	if opts.IAMRoleARN != nil {
 		runInstancesInput.IamInstanceProfile = &types.IamInstanceProfileSpecification{
 			Name: aws.String("DumieInstanceManagerProfile"),
 		}

@@ -9,6 +9,9 @@ REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
 log_file="/home/ec2-user/active.log"
 no_ssh_count=0
 
+# Get timeout from environment variable, default to 60 seconds
+TIMEOUT_SECONDS=${TIMEOUT_SECONDS:-60}
+
 # Function to release lock with retries
 release_lock() {
     local lock_id=$1
@@ -44,8 +47,8 @@ while true; do
   active_users=$(who | grep -c 'pts/')
   if [ "$active_users" -eq 0 ]; then
     ((no_ssh_count++))
-    if [ "$no_ssh_count" -ge 60 ]; then  # 1 minute (60 seconds)
-      echo "$(date): No SSH sessions for 1 minute. Creating AMI and snapshot before termination..." >> "$log_file"
+    if [ "$no_ssh_count" -ge $TIMEOUT_SECONDS ]; then  # Use environment variable
+      echo "$(date): No SSH sessions for $TIMEOUT_SECONDS seconds. Creating AMI and snapshot before termination..." >> "$log_file"
       
       # Get current instance ID when starting termination
       INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)

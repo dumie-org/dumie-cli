@@ -19,7 +19,7 @@ var manualCmd = &cobra.Command{
 		profile := args[0]
 		ctx := context.TODO()
 
-		instanceID, err := ec2.RestoreOrCreateInstance(ctx, profile, nil, nil)
+		instanceID, err := ec2.RestoreOrCreateInstance(ctx, profile, nil, nil, 60) // Default 60 seconds timeout
 		if err != nil {
 			fmt.Printf("Failed to create/restore instance: %v\n", err)
 			return
