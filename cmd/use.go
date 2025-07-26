@@ -140,6 +140,17 @@ when no SSH sessions are active.`,
 			}
 		} else {
 			instanceID = *instanceIDPtr
+			
+			// Check if timeout flag is provided and update existing instance
+			if cmd.Flags().Changed("timeout") {
+				fmt.Printf("Updating timeout for existing instance [%s] to %d seconds...\n", instanceID, timeoutFlag)
+				err = ec2utils.UpdateInstanceTimeout(ctx, ec2Client, instanceID, timeoutFlag)
+				if err != nil {
+					fmt.Printf("Warning: failed to update timeout: %v\n", err)
+				} else {
+					fmt.Printf("Successfully updated timeout to %d seconds\n", timeoutFlag)
+				}
+			}
 		}
 
 		publicDNS, err := ec2utils.GetInstancePublicDNS(ec2Client, instanceID)

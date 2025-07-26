@@ -106,7 +106,7 @@ func TryRestoreFromSnapshot(ctx context.Context, client *ec2.Client, profile str
 		InstanceType:   types.InstanceTypeT2Micro,
 		SecurityGroup:  sgID,
 		KeyName:        keyName,
-		UserDataPath:   nil,
+		UserDataPath:   nil, // No user data for restored instances
 		IAMRoleARN:     iamRoleARN,
 		Restored:       true,
 		TimeoutSeconds: timeoutSeconds,
@@ -115,8 +115,16 @@ func TryRestoreFromSnapshot(ctx context.Context, client *ec2.Client, profile str
 		return "", fmt.Errorf("failed to launch instance: %w", err)
 	}
 
+	// Update timeout in the running instance
+	err = UpdateInstanceTimeout(ctx, client, *instanceIDPtr, timeoutSeconds)
+	if err != nil {
+		fmt.Printf("Warning: failed to update timeout: %v\n", err)
+	}
+
 	return *instanceIDPtr, nil
 }
+
+
 
 func DeleteSnapshotAndAMIIfExists(ctx context.Context, client *ec2.Client, snapshotID string, profile string) error {
 	// check AMI using the snapshot

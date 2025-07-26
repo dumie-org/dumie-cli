@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -336,4 +337,42 @@ func GetInstancePublicDNS(client *ec2.Client, instanceID string) (string, error)
 	}
 
 	return *instance.PublicDnsName, nil
+}
+
+// UpdateInstanceTimeout updates the timeout value in the SSH monitoring script on a running instance
+func UpdateInstanceTimeout(ctx context.Context, client *ec2.Client, instanceID string, timeoutSeconds int) error {
+	// Get instance public DNS
+	publicDNS, err := GetInstancePublicDNS(client, instanceID)
+	if err != nil {
+		return fmt.Errorf("failed to get public DNS: %w", err)
+	}
+
+	// Create a temporary script to update the timeout
+	updateScript := fmt.Sprintf(`#!/bin/bash
+# Update timeout in SSH monitoring script
+sudo sed -i 's/TIMEOUT_SECONDS=[0-9]*/TIMEOUT_SECONDS=%d/' /usr/local/bin/ssh_monitor.sh
+# Restart the SSH monitoring service
+sudo systemctl restart ssh-monitor.service
+echo "Timeout updated to %d seconds"`, timeoutSeconds, timeoutSeconds)
+
+	// Execute the script on the instance
+	keyPairName, err := common.GetKeyPairName()
+	if err != nil {
+		return fmt.Errorf("failed to get key pair name: %w", err)
+	}
+
+	keyFilePath := fmt.Sprintf("%s.pem", keyPairName)
+	
+	// Use SSH to execute the update script
+	sshCmd := exec.Command("ssh", 
+		"-i", keyFilePath,
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "UserKnownHostsFile=/dev/null",
+		fmt.Sprintf("ec2-user@%s", publicDNS),
+		updateScript)
+	
+	sshCmd.Stdout = os.Stdout
+	sshCmd.Stderr = os.Stderr
+	
+	return sshCmd.Run()
 }
