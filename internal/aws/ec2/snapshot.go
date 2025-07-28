@@ -53,7 +53,7 @@ func (s *SnapshotManager) CreateSnapshot(ctx context.Context, volumeID, instance
 	return *result.SnapshotId, nil
 }
 
-func TryRestoreFromSnapshot(ctx context.Context, client *ec2.Client, profile string, iamRoleARN *string) (string, error) {
+func TryRestoreFromSnapshot(ctx context.Context, client *ec2.Client, profile string, iamRoleARN *string, timeoutSeconds int) (string, error) {
 	// Find Snapshot (tag:Name = profile)
 	describeSnapshotsInput := &ec2.DescribeSnapshotsInput{
 		Filters: []types.Filter{
@@ -100,13 +100,31 @@ func TryRestoreFromSnapshot(ctx context.Context, client *ec2.Client, profile str
 	}
 
 	// Launch EC2 Instance
-	instanceIDPtr, err := LaunchEC2Instance(client, profile, amiID, types.InstanceTypeT2Micro, sgID, keyName, nil, iamRoleARN, true)
+	instanceIDPtr, err := LaunchEC2Instance(client, InstanceOptions{
+		Profile:        profile,
+		AMIID:          amiID,
+		InstanceType:   types.InstanceTypeT2Micro,
+		SecurityGroup:  sgID,
+		KeyName:        keyName,
+		UserDataPath:   nil, // No user data for restored instances
+		IAMRoleARN:     iamRoleARN,
+		Restored:       true,
+		TimeoutSeconds: timeoutSeconds,
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to launch instance: %w", err)
 	}
 
+	// Update timeout in the running instance
+	err = UpdateInstanceTimeout(ctx, client, *instanceIDPtr, timeoutSeconds)
+	if err != nil {
+		fmt.Printf("Warning: failed to update timeout: %v\n", err)
+	}
+
 	return *instanceIDPtr, nil
 }
+
+
 
 func DeleteSnapshotAndAMIIfExists(ctx context.Context, client *ec2.Client, snapshotID string, profile string) error {
 	// check AMI using the snapshot

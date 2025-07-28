@@ -42,7 +42,7 @@ func connectToInstance(instanceID, publicDNS string) error {
 	return sshCmd.Run()
 }
 
-func createNewInstance(profile string) (string, error) {
+func createNewInstance(profile string, timeoutSeconds int) (string, error) {
 	iamClient, err := common.GetIAMClient()
 	if err != nil {
 		return "", fmt.Errorf("failed to get IAM client: %v", err)
@@ -54,15 +54,20 @@ func createNewInstance(profile string) (string, error) {
 	}
 
 	userDataPath := filepath.Join("scripts", "user_data", "ssh_monitor.sh")
-	return ec2utils.RestoreOrCreateInstance(context.TODO(), profile, &userDataPath, &roleARN)
+	return ec2utils.RestoreOrCreateInstance(context.TODO(), profile, &userDataPath, &roleARN, timeoutSeconds)
 }
+
+var timeoutFlag int
 
 var useCmd = &cobra.Command{
 	Use:   "use [profile]",
 	Short: "Create or connect to an instance with SSH monitoring",
 	Long: `Create or connect to an instance with SSH monitoring.
 If no instance exists for the profile, it will create one with SSH monitoring enabled.
-If an instance exists, it will connect to it.`,
+If an instance exists, it will connect to it.
+
+The SSH monitoring will automatically terminate the instance after the specified timeout
+when no SSH sessions are active.`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		profile := args[0]
@@ -127,14 +132,25 @@ If an instance exists, it will connect to it.`,
 
 		var instanceID string
 		if instanceIDPtr == nil {
-			fmt.Printf("No instance found for profile [%s]. Creating new instance...\n", profile)
-			instanceID, err = createNewInstance(profile)
+			fmt.Printf("No instance found for profile [%s]. Creating new instance with %d second timeout...\n", profile, timeoutFlag)
+			instanceID, err = createNewInstance(profile, timeoutFlag)
 			if err != nil {
 				fmt.Printf("Failed to launch instance: %v\n", err)
 				return
 			}
 		} else {
 			instanceID = *instanceIDPtr
+			
+			// Check if timeout flag is provided and update existing instance
+			if cmd.Flags().Changed("timeout") {
+				fmt.Printf("Updating timeout for existing instance [%s] to %d seconds...\n", instanceID, timeoutFlag)
+				err = ec2utils.UpdateInstanceTimeout(ctx, ec2Client, instanceID, timeoutFlag)
+				if err != nil {
+					fmt.Printf("Warning: failed to update timeout: %v\n", err)
+				} else {
+					fmt.Printf("Successfully updated timeout to %d seconds\n", timeoutFlag)
+				}
+			}
 		}
 
 		publicDNS, err := ec2utils.GetInstancePublicDNS(ec2Client, instanceID)
@@ -160,5 +176,6 @@ If an instance exists, it will connect to it.`,
 }
 
 func init() {
+	useCmd.Flags().IntVarP(&timeoutFlag, "timeout", "t", 60, "Timeout in seconds before terminating instance when no SSH sessions are active (default: 60)")
 	rootCmd.AddCommand(useCmd)
 }

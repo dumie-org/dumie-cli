@@ -11,7 +11,7 @@ import (
 	"github.com/dumie-org/dumie-cli/internal/aws/ddb"
 )
 
-func RestoreOrCreateInstance(ctx context.Context, profile string, userDataPath *string, iamRoleARN *string) (string, error) {
+func RestoreOrCreateInstance(ctx context.Context, profile string, userDataPath *string, iamRoleARN *string, timeoutSeconds int) (string, error) {
 	lockClient, err := common.GetDynamoDBClient()
 	if err != nil {
 		return "", fmt.Errorf("failed to get DDB client: %w", err)
@@ -42,7 +42,7 @@ func RestoreOrCreateInstance(ctx context.Context, profile string, userDataPath *
 	}
 
 	// Try restore from snapshot
-	instanceID, err := TryRestoreFromSnapshot(ctx, client, profile, iamRoleARN)
+	instanceID, err := TryRestoreFromSnapshot(ctx, client, profile, iamRoleARN, timeoutSeconds)
 	if err != nil {
 		return "", err
 	}
@@ -52,10 +52,10 @@ func RestoreOrCreateInstance(ctx context.Context, profile string, userDataPath *
 	}
 
 	// Launch new instance
-	return launchNewInstance(ctx, client, profile, userDataPath, iamRoleARN)
+	return launchNewInstance(ctx, client, profile, userDataPath, iamRoleARN, timeoutSeconds)
 }
 
-func launchNewInstance(ctx context.Context, client *ec2.Client, profile string, userDataPath *string, iamRoleARN *string) (string, error) {
+func launchNewInstance(ctx context.Context, client *ec2.Client, profile string, userDataPath *string, iamRoleARN *string, timeoutSeconds int) (string, error) {
 	fmt.Println("No snapshot found. Launching fresh instance.")
 
 	amiID, err := GetLatestAmazonLinuxAMI(client)
@@ -73,7 +73,17 @@ func launchNewInstance(ctx context.Context, client *ec2.Client, profile string, 
 		return "", fmt.Errorf("failed to get key pair: %w", err)
 	}
 
-	instanceIDPtr, err := LaunchEC2Instance(client, profile, amiID, types.InstanceTypeT2Micro, sgID, keyName, userDataPath, iamRoleARN, false)
+	instanceIDPtr, err := LaunchEC2Instance(client, InstanceOptions{
+		Profile:        profile,
+		AMIID:          amiID,
+		InstanceType:   types.InstanceTypeT2Micro,
+		SecurityGroup:  sgID,
+		KeyName:        keyName,
+		UserDataPath:   userDataPath,
+		IAMRoleARN:     iamRoleARN,
+		Restored:       false,
+		TimeoutSeconds: timeoutSeconds,
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to launch instance: %w", err)
 	}
